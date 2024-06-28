@@ -26,7 +26,7 @@ public class TournamentSoftware extends JFrame {
         setTitle("Tischtennis Turniersoftware");
         setSize(600, 300);
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
         addWindowListener(new WindowAdapter() {
