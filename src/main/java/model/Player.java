@@ -36,6 +36,10 @@ public class Player {
         this.feinBuchholz = 0;
         this.wins = 0;
         this.losses = 0;
+        this.setsWon = 0;
+        this.setsLost = 0;
+        this.ballsWon = 0;
+        this.ballsLost = 0;
     }
 
     /**
@@ -45,6 +49,24 @@ public class Player {
      */
     public String getFullName() {
         return firstName + " " + lastName;
+    }
+
+    /**
+     * Retrieves the first name of the player.
+     *
+     * @return the first name of the player
+     */
+    public String getFirstName() {
+        return firstName;
+    }
+
+    /**
+     * Retrieves the last name of the player.
+     *
+     * @return the last name of the player
+     */
+    public String getLastName() {
+        return lastName;
     }
 
     /**

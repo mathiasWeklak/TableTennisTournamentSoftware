@@ -1,10 +1,18 @@
+
+
 plugins {
     id("java")
     application
 }
 
+val licenseFile = project.file("LICENSE")
+
 repositories {
     mavenCentral()
+}
+
+dependencies {
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.0-M2")
 }
 
 application {
@@ -34,3 +42,12 @@ tasks.register<Jar>("createExecutableJar") {
 }
 
 tasks.getByName("build").dependsOn("createExecutableJar")
+
+tasks.test {
+    useJUnitPlatform()
+    jvmArgs = listOf("-XX:+EnableDynamicAgentLoading")
+}
+
+tasks.jar {
+    from(licenseFile)
+}
