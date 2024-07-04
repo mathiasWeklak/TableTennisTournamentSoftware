@@ -135,8 +135,7 @@ public class TournamentRound extends JFrame {
         JButton resultEntryButton = new JButton("Ergebnisse erfassen");
 
         resultEntryButton.addActionListener(e -> {
-            ResultEntryWindow resultEntryWindow = new ResultEntryWindow(matches, this);
-            resultEntryWindow.setVisible(true);
+            new ResultEntryController(matches, this);
             updateResultsTable();
         });
         bottomPanel.add(resultEntryButton);
@@ -163,8 +162,8 @@ public class TournamentRound extends JFrame {
                 allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
                 Set<Match> uniqueAllPossibleOpenMatches = new HashSet<>(allPossibleOpenMatches);
 
-                MatchManager manager = new MatchManager(uniqueAllPossibleOpenMatches, playerList.size(), this);
-                manager.setVisible(true);
+                MatchManagerController manager = new MatchManagerController(uniqueAllPossibleOpenMatches, playerList.size(), this);
+                manager.view.setVisible(true);
             } else {
                 JOptionPane.showMessageDialog(this, "Setzung kann nicht manipuliert werden, da bereits Ergebnisse eingetragen wurden.", "Ergebnisse vorhanden", JOptionPane.WARNING_MESSAGE);
             }
@@ -1102,7 +1101,7 @@ public class TournamentRound extends JFrame {
         List<Match> matchesWithoutBye = matches.stream()
                 .filter(match -> match.getSecondPlayer() != null)
                 .collect(Collectors.toList());
-        new RefereeSheets(matchesWithoutBye).setVisible(true);
+        new RefereeSheetsController(matchesWithoutBye);
     }
 
     /**

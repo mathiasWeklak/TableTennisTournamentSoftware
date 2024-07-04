@@ -1,10 +1,9 @@
 package controller;
 
 import model.Match;
+import view.RefereeSheetsView;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.print.Printable;
@@ -13,18 +12,18 @@ import java.awt.print.PrinterJob;
 import java.util.List;
 
 /**
- * This class represents the window for displaying and printing referee sheets for matches.
+ * This class represents the controller for managing the referee sheets for matches.
  */
-public class RefereeSheets extends JFrame {
+public class RefereeSheetsController {
 
     private final List<Match> matches;
 
     /**
-     * Constructs a new RefereeSheets window.
+     * Constructs a new RefereeSheetsController.
      *
      * @param matches the list of matches to display
      */
-    public RefereeSheets(List<Match> matches) {
+    public RefereeSheetsController(List<Match> matches) {
         this.matches = matches;
         SwingUtilities.invokeLater(this::initializeUI);
     }
@@ -33,38 +32,7 @@ public class RefereeSheets extends JFrame {
      * Initializes the user interface.
      */
     private void initializeUI() {
-        setTitle("Schiedsrichterzettel");
-        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setSize(600, 400);
-        setLocationRelativeTo(null);
-
-        JPanel contentPane = new JPanel(new BorderLayout());
-        contentPane.setBorder(new EmptyBorder(10, 10, 10, 10));
-        setContentPane(contentPane);
-
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton printButton = new JButton("Schiedsrichterzettel drucken");
-        printButton.addActionListener(e -> printRefereeSheets());
-        buttonPanel.add(printButton);
-        contentPane.add(buttonPanel, BorderLayout.SOUTH);
-
-        JTabbedPane tabbedPane = new JTabbedPane();
-        contentPane.add(tabbedPane, BorderLayout.CENTER);
-
-        matches.forEach(match -> {
-            JPanel matchPanel = new JPanel(new BorderLayout());
-            matchPanel.setBorder(BorderFactory.createTitledBorder("Tisch " + match.getTableNumber()));
-
-            JTable table = new JTable(createRefereeSheetTableModel(match));
-            configureTable(table);
-
-            JScrollPane scrollPane = new JScrollPane(table);
-            matchPanel.add(scrollPane, BorderLayout.CENTER);
-
-            tabbedPane.addTab("Tisch " + match.getTableNumber(), matchPanel);
-        });
-
-        setVisible(true);
+        new RefereeSheetsView(this, matches);
     }
 
     /**
@@ -73,7 +41,7 @@ public class RefereeSheets extends JFrame {
      * @param match the match for which to create the table model
      * @return the table model for the referee sheet
      */
-    private DefaultTableModel createRefereeSheetTableModel(Match match) {
+    public DefaultTableModel createRefereeSheetTableModel(Match match) {
         String[] columnNames = {"", "", ""};
         Object[][] data = {
                 {"", match.getFirstPlayer().getFullName(), match.getSecondPlayer().getFullName()},
@@ -93,29 +61,9 @@ public class RefereeSheets extends JFrame {
     }
 
     /**
-     * Configures the appearance and behavior of a JTable.
-     *
-     * @param table the table to configure
-     */
-    private void configureTable(JTable table) {
-        table.setRowHeight(20);
-        table.getColumnModel().getColumn(0).setPreferredWidth(50);
-        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                if (column == 0) {
-                    setHorizontalAlignment(SwingConstants.CENTER);
-                }
-                return c;
-            }
-        });
-    }
-
-    /**
      * Prints the referee sheets.
      */
-    private void printRefereeSheets() {
+    public void printRefereeSheets() {
         PrinterJob job = PrinterJob.getPrinterJob();
         job.setJobName("Schiedsrichterzettel");
 

@@ -1,92 +1,47 @@
 package controller;
 
 import model.Player;
+import view.TournamentView;
 
 import javax.swing.*;
-import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 
 /**
- * A GUI application for managing a table tennis tournament.
+ * Controller class for managing the tournament setup and player management.
+ * Handles interactions between the TournamentView and the underlying player data model.
  */
-public class TournamentSoftware extends JFrame {
+public class TournamentController {
+    private final TournamentView view;
     private final ArrayList<Player> playerList;
-    private final JList<String> playerJList;
-    private final DefaultListModel<String> playerListModel;
-    private final JTextField tournamentNameField;
-    private final JTextField tableCountField;
-    private final JCheckBox modusField;
 
     /**
-     * Constructs the tournament software GUI.
+     * Constructs a TournamentController with the specified view.
+     *
+     * @param view The view associated with this controller.
      */
-    public TournamentSoftware() {
-        setTitle("Tischtennis Turniersoftware");
-        setSize(600, 300);
-        setLocationRelativeTo(null);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLayout(new BorderLayout());
+    public TournamentController(TournamentView view) {
+        this.view = view;
+        this.playerList = new ArrayList<>();
 
-        addWindowListener(new WindowAdapter() {
+        view.getAddPlayerButton().addActionListener(e -> addPlayer());
+        view.getRemovePlayerButton().addActionListener(e -> removePlayer());
+        view.getBeginTournamentButton().addActionListener(e -> beginTournament());
+
+        view.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
                 if (confirmAction()) {
-                    dispose();
+                    view.dispose();
                 }
             }
         });
-
-        playerList = new ArrayList<>();
-        playerListModel = new DefaultListModel<>();
-        playerJList = new JList<>(playerListModel);
-
-        JPanel topPanel = new JPanel();
-        JLabel nameLabel = new JLabel("Turniername:");
-        tournamentNameField = new JTextField(15);
-        topPanel.add(nameLabel);
-        topPanel.add(tournamentNameField);
-
-        JLabel tableLabel = new JLabel("Anzahl der Tische:");
-        tableCountField = new JTextField(5);
-        topPanel.add(tableLabel);
-        topPanel.add(tableCountField);
-
-        JLabel modusCheckboxLabel = new JLabel("Jeder gegen Jeden?");
-        modusField = new JCheckBox();
-        topPanel.add(modusCheckboxLabel);
-        topPanel.add(modusField);
-
-        JPanel centerPanel = new JPanel(new BorderLayout());
-        JPanel playerPanel = new JPanel(new BorderLayout());
-        playerPanel.setBorder(BorderFactory.createTitledBorder("Spielerliste"));
-        JScrollPane playerScrollPane = new JScrollPane(playerJList);
-        playerPanel.add(playerScrollPane, BorderLayout.CENTER);
-
-        JPanel buttonPanel = new JPanel();
-        JButton addPlayerButton = new JButton("Spieler hinzufügen");
-        JButton removePlayerButton = new JButton("Spieler entfernen");
-        addPlayerButton.addActionListener(e -> addPlayer());
-        removePlayerButton.addActionListener(e -> removePlayer());
-        buttonPanel.add(addPlayerButton);
-        buttonPanel.add(removePlayerButton);
-        playerPanel.add(buttonPanel, BorderLayout.SOUTH);
-
-        centerPanel.add(playerPanel, BorderLayout.CENTER);
-
-        add(topPanel, BorderLayout.NORTH);
-        add(centerPanel, BorderLayout.CENTER);
-
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        JButton beginTournamentButton = new JButton("Turnier beginnen und erste Runde auslosen");
-        beginTournamentButton.addActionListener(e -> beginTournament());
-        bottomPanel.add(beginTournamentButton);
-        add(bottomPanel, BorderLayout.SOUTH);
     }
 
     /**
-     * Adds a new player to the tournament player list.
+     * Adds a new player to the player list.
+     * Prompts the user for player details and validates the input.
      */
     private void addPlayer() {
         JTextField firstNameField = new JTextField(10);
@@ -139,10 +94,11 @@ public class TournamentSoftware extends JFrame {
     }
 
     /**
-     * Removes the selected player from the tournament player list.
+     * Removes the selected player from the player list.
+     * Prompts the user to select a player to remove.
      */
     private void removePlayer() {
-        int selectedIndex = playerJList.getSelectedIndex();
+        int selectedIndex = view.getPlayerJList().getSelectedIndex();
         if (selectedIndex != -1) {
             playerList.remove(selectedIndex);
             updatePlayerList();
@@ -152,20 +108,23 @@ public class TournamentSoftware extends JFrame {
     }
 
     /**
-     * Updates the player list in the GUI.
+     * Updates the player list displayed in the view.
+     * Sorts players by their TTR value in descending order.
      */
     private void updatePlayerList() {
         playerList.sort((p1, p2) -> Integer.compare(p2.getTtr(), p1.getTtr()));
 
+        DefaultListModel<String> playerListModel = view.getPlayerListModel();
         playerListModel.clear();
         playerList.forEach(player -> playerListModel.addElement(player.getFullName() + " - " + player.getClub() + " - TTR: " + player.getTtr()));
     }
 
     /**
-     * Begins the tournament with the entered tournament name and table count.
+     * Begins the tournament with the specified settings.
+     * Validates the tournament name and table count, and starts a new tournament round.
      */
     private void beginTournament() {
-        String tournamentName = tournamentNameField.getText().trim();
+        String tournamentName = view.getTournamentNameField().getText().trim();
         if (tournamentName.isEmpty()) {
             JOptionPane.showMessageDialog(null, "Bitte geben Sie einen Turniernamen ein.");
             return;
@@ -173,7 +132,7 @@ public class TournamentSoftware extends JFrame {
 
         int tableCount;
         try {
-            tableCount = Integer.parseInt(tableCountField.getText().trim());
+            tableCount = Integer.parseInt(view.getTableCountField().getText().trim());
             if (tableCount <= 0) {
                 throw new NumberFormatException();
             }
@@ -182,14 +141,14 @@ public class TournamentSoftware extends JFrame {
             return;
         }
 
-        new TournamentRound(playerList, tournamentName, tableCount, modusField.isSelected()).setVisible(true);
-        dispose();
+        new TournamentRound(playerList, tournamentName, tableCount, view.getModusField().isSelected()).setVisible(true);
+        view.dispose();
     }
 
     /**
-     * Asks for confirmation before closing the application window.
+     * Prompts the user for confirmation before closing the application.
      *
-     * @return true if user confirms to exit, false otherwise
+     * @return true if the user confirms to close the application, false otherwise.
      */
     private boolean confirmAction() {
         int result = JOptionPane.showConfirmDialog(null, "Wollen Sie das Programm wirklich beenden?", "Bestätigung", JOptionPane.YES_NO_OPTION);
@@ -199,9 +158,13 @@ public class TournamentSoftware extends JFrame {
     /**
      * Main method to start the application.
      *
-     * @param args Command-line arguments (unused)
+     * @param args Command-line arguments (unused).
      */
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new TournamentSoftware().setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            TournamentView view = new TournamentView();
+            new TournamentController(view);
+            view.setVisible(true);
+        });
     }
 }
