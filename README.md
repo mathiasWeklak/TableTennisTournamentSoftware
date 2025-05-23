@@ -1,28 +1,45 @@
 # TableTennisTournamentSoftware
 
-## Beschreibung
-Die TableTennisTournamentSoftware ist eine Java-basierte Anwendung zur Verwaltung von Tischtennisturnieren. Sie bietet eine Benutzeroberfläche für die Organisation von Spielern, die Eingabe von Turnierdetails und die Durchführung von Turnieren. Unterstützt werden Turniere im Modus "Schweizer System" und "Jeder gegen Jeden".
+## 🏓 Overview
+**TableTennisTournamentSoftware** is a Java-based desktop application for organizing and managing table tennis tournaments.  
+It supports both **Swiss-system** and **round-robin** (Jeder-gegen-Jeden) formats and offers a graphical user interface to streamline tournament setup, player management, result tracking, and printing.
 
-## Funktionalitäten
-- **Automatisches Speichern des Turniers zu Beginn jeder neuen Runde
-- **Möglichkeit zum Laden gespeicherter Turniere
-- **Geladene und noch nicht beendete Turniere können fortgesetzt werden
-- **Spieler- und Turnierverwaltung**: Hinzufügen und Entfernen von Spielern, Festlegen von Turniernamen und Tischanzahl.
-- **Turnierablauf**: Anzeige der (ausgelosten) Begegnungen und der aktuellen Tabellen.
-- **Tischzulosungen**: Tische werden automatisch zugelost.
-- **Freilos Spiele**: Zuweisung von Freilosspielen bei ungerader Spieleranzahl.
-- **Ergebniseingabe**: Eingabe und Berechnung von Satz- und Gesamtergebnissen.
-- **Schiedsrichterzettel**: Anzeige und Druck von Schiedsrichterzetteln für die Spiele.
-- **Manipulation von Setzungen (nur Schweizer-System)**: Möglichkeit zur Anpassungen der Setzungen wenn die Auslosung nicht den Vorstellungen entspricht.
+---
 
-## Einschränkungen
-- Kein Speichern
-- leicht modifizierte Setzregeln für das Schweizer System
+## ✨ Features
 
-**Eine Verwendung ist nur für nicht kommerzielle und nicht TTR Relevante Turniere gestattet!**
+- ✅ **Automatic saving** at the beginning of each new round
+- 🔁 **Resume unfinished tournaments** by loading previously saved states
+- 👥 **Player & tournament setup**: Add/remove players, define tournament name, table count, and match format
+- 📋 **Tournament progression**: Display match pairings and update the current standings
+- 🪑 **Automatic table assignment** for each match
+- 🕳️ **Bye match support** for tournaments with an odd number of players
+- 🧮 **Score entry**: Input set-level and overall match results
+- 🖨️ **Printable referee sheets** for all current matches
+- 🛠️ **Manual match pairing override** (Swiss-system only)
 
-## Lizenz
-CC BY-NC-SA 4.0
+---
 
-## Autor
-[Mathias Weklak]
+## ⚠ Limitations
+
+- ❌ Currently no manual save function – saving is done automatically
+- 🧪 Slightly simplified Swiss pairing logic (non-official TTR rules)
+
+---
+
+## 📂 Usage Restrictions
+
+> **This software is intended for non-commercial use only.  
+> It must not be used for official TTR-relevant competitions.**
+
+---
+
+## 📝 License
+
+[**Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+---
+
+## 👨‍💻 Author
+
+**Mathias Weklak**
