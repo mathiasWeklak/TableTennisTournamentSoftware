@@ -16,6 +16,7 @@ public class TournamentView extends JFrame {
     private final JButton addPlayerButton;
     private final JButton removePlayerButton;
     private final JButton beginTournamentButton;
+    private final JMenuItem loadMenuItem;
 
     /**
      * Constructs a TournamentView GUI.
@@ -68,6 +69,14 @@ public class TournamentView extends JFrame {
         beginTournamentButton = new JButton("Turnier beginnen und erste Runde auslosen");
         bottomPanel.add(beginTournamentButton);
         add(bottomPanel, BorderLayout.SOUTH);
+
+        JMenuBar menuBar = new JMenuBar();
+        JMenuItem loadTournamentItem = new JMenuItem("Turnier laden");
+
+        menuBar.add(loadTournamentItem);
+        setJMenuBar(menuBar);
+
+        this.loadMenuItem = loadTournamentItem;
     }
 
     /**
@@ -141,4 +150,19 @@ public class TournamentView extends JFrame {
     public JButton getBeginTournamentButton() {
         return beginTournamentButton;
     }
+
+    /**
+     * Returns the menu item used to trigger loading a previously saved tournament.
+     *
+     * <p>This menu item is typically placed in the application's main menu bar
+     * and is associated with an {@link java.awt.event.ActionListener} that opens
+     * a file chooser dialog to load a serialized tournament state.</p>
+     *
+     * @return the {@link JMenuItem} for loading a saved tournament
+     */
+    public JMenuItem getLoadMenuItem() {
+        return loadMenuItem;
+    }
+
+
 }

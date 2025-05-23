@@ -1,15 +1,20 @@
 package model;
 
+import java.io.Serial;
+import java.io.Serializable;
+
 /**
  * Represents a match between two players in a tournament.
  */
-public class Match {
-
+public class Match implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
     private final Player firstPlayer;
     private final Player secondPlayer;
     private int tableNumber;
     private final Result result;
     private String overallResult;
+    private boolean evaluated = false;
 
     /**
      * Constructs a match between two players at a specific table.
@@ -101,9 +106,34 @@ public class Match {
     }
 
     /**
+     * Returns whether this match has already been evaluated for score and statistics calculations.
+     *
+     * @return {@code true} if the match has been processed and counted, {@code false} otherwise
+     */
+    public boolean isEvaluated() {
+        return evaluated;
+    }
+
+
+    /**
+     * Sets the evaluation status of this match.
+     *
+     * <p>If set to {@code true}, the match is considered already processed during
+     * score calculation and will be skipped in future evaluations to avoid double counting.</p>
+     *
+     * @param evaluated {@code true} to mark the match as evaluated; {@code false} otherwise
+     */
+    public void setEvaluated(boolean evaluated) {
+        this.evaluated = evaluated;
+    }
+
+
+    /**
      * Represents the set results of a match.
      */
-    public static class Result {
+    public static class Result implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
         private final String[][] setResults;
 
         /**

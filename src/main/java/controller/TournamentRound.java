@@ -2,6 +2,7 @@ package controller;
 
 import model.Match;
 import model.Player;
+import model.TournamentState;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -11,6 +12,7 @@ import java.awt.event.WindowEvent;
 import java.awt.print.Printable;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
+import java.io.*;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,6 +35,7 @@ public class TournamentRound extends JFrame {
     public boolean finished;
     int attempts;
     private static boolean modus = false;
+    private final String tournamentName;
 
     /**
      * Constructs a new TournamentRound object with the given list of players, tournament name, and table number.
@@ -51,9 +54,10 @@ public class TournamentRound extends JFrame {
         this.allMatches = new ArrayList<>();
         this.pairingsTextArea = new JTextArea(11, 20);
         this.currentRound = 1;
-        this.currentRoundLabel = new JLabel("Runde " +currentRound);
+        this.tournamentName = tournamentName;
+        this.currentRoundLabel = new JLabel("Runde " + currentRound);
         JPanel topPanel = new JPanel(new BorderLayout());
-        JLabel titleLabel = new JLabel("Turnier: " + tournamentName);
+        JLabel titleLabel = new JLabel("Turnier: " + this.tournamentName);
         this.byeList = new ArrayList<>();
         this.finished = false;
         this.attempts = 0;
@@ -788,250 +792,105 @@ public class TournamentRound extends JFrame {
     }
 
     /**
-     * Calculates the scores and statistics for each player in the Swiss System tournament.
-     * Updates each player's points, wins, losses, sets won, sets lost, balls won, balls lost,
-     * Buchholz score, and FeinBuchholz score based on their match results.
+     * Calculates updated scores and statistics for all players based on the recorded matches.
      *
-     * @param players The list of players for whom scores and statistics are to be calculated.
+     * <p>This method first resets all statistics (points, wins, losses, sets, balls, Buchholz scores) for each player.
+     * It then removes duplicate bye matches (freilos) from the match list, resets the evaluation status of all matches,
+     * and iterates through all matches to update each player's results based on match outcomes.
+     * Matches are marked as evaluated after processing to prevent duplicate calculations.</p>
+     *
+     * @param players the list of all tournament players whose statistics should be updated
      */
-
     private void calculateSwissSystemScores(List<Player> players) {
         players.forEach(player -> {
-            player.setPoints(calculatePoints(player));
-            player.setWins(calculateWins(player));
-            player.setLosses(calculateLosses(player));
-            player.setSetsWon(calculateSetsWon(player));
-            player.setSetsLost(calculateSetsLost(player));
-            player.setBallsWon(calculateBallsWon(player));
-            player.setBallsLost(calculateBallsLost(player));
+            player.setPoints(0);
+            player.setWins(0);
+            player.setLosses(0);
+            player.setSetsWon(0);
+            player.setSetsLost(0);
+            player.setBallsWon(0);
+            player.setBallsLost(0);
+            player.setBuchholz(0);
+            player.setFeinBuchholz(0);
         });
 
-        players.forEach(player -> player.setBuchholz(calculateBuchholz(player)));
-        players.forEach(player -> player.setFeinBuchholz(calculateFeinBuchholz(player)));
-    }
+        removeDuplicateByeMatches();
 
-    /**
-     * Calculates the total points scored by the player based on all matches played.
-     *
-     * @param player The player for whom the points are to be calculated.
-     * @return The total points scored by the player.
-     */
+        allMatches.forEach(match -> match.setEvaluated(false));
 
-    private int calculatePoints(Player player) {
-        return allMatches.stream()
-                .filter(match -> isPlayerInMatch(match, player))
-                .mapToInt(match -> calculateMatchPoints(match, player))
-                .sum();
-    }
+        for (Match match : allMatches) {
+            if (match.isEvaluated()) continue;
 
-    /**
-     * Calculates the points scored by the player in a specific match.
-     *
-     * @param match The match in which the points are to be calculated.
-     * @param player The player for whom the points are to be calculated.
-     * @return The points scored by the player in the match: 1 if the player wins, 0 otherwise.
-     */
-    private int calculateMatchPoints(Match match, Player player) {
-        if (match.getSecondPlayer() == null) {
-            return 1;
+            Player p1 = match.getFirstPlayer();
+            Player p2 = match.getSecondPlayer();
+
+            if (p2 == null) {
+                p1.setPoints(p1.getPoints() + 1);
+                p1.setWins(p1.getWins() + 1);
+                p1.setSetsWon(p1.getSetsWon() + 3);
+                p1.setBallsWon(p1.getBallsWon() + 33);
+            } else {
+                String[] result = match.getOverallResult().split(":");
+                if (result.length == 2) {
+                    int s1 = Integer.parseInt(result[0]);
+                    int s2 = Integer.parseInt(result[1]);
+
+                    if (s1 > s2) {
+                        p1.setPoints(p1.getPoints() + 1);
+                        p1.setWins(p1.getWins() + 1);
+                        p2.setLosses(p2.getLosses() + 1);
+                    } else if (s2 > s1) {
+                        p2.setPoints(p2.getPoints() + 1);
+                        p2.setWins(p2.getWins() + 1);
+                        p1.setLosses(p1.getLosses() + 1);
+                    }
+
+                    p1.setSetsWon(p1.getSetsWon() + s1);
+                    p1.setSetsLost(p1.getSetsLost() + s2);
+                    p2.setSetsWon(p2.getSetsWon() + s2);
+                    p2.setSetsLost(p2.getSetsLost() + s1);
+
+                    String[][] results = match.getResults();
+                    for (String[] set : results) {
+                        if (set[0] != null && !set[0].isEmpty() && set[1] != null && !set[1].isEmpty()) {
+                            int b1 = Integer.parseInt(set[0]);
+                            int b2 = Integer.parseInt(set[1]);
+                            p1.setBallsWon(p1.getBallsWon() + b1);
+                            p1.setBallsLost(p1.getBallsLost() + b2);
+                            p2.setBallsWon(p2.getBallsWon() + b2);
+                            p2.setBallsLost(p2.getBallsLost() + b1);
+                        }
+                    }
+                }
+            }
+
+            match.setEvaluated(true);
         }
 
-        String[] result = match.getOverallResult().split(":");
-        if (result.length != 2) {
-            return 0;
-        }
-
-        int firstPlayerSets = Integer.parseInt(result[0]);
-        int secondPlayerSets = Integer.parseInt(result[1]);
-
-        if (match.getFirstPlayer().equals(player) && firstPlayerSets > secondPlayerSets) {
-            return 1;
-        } else if (match.getSecondPlayer().equals(player) && secondPlayerSets > firstPlayerSets) {
-            return 1;
-        }
-        return 0;
+        players.forEach(p -> p.setBuchholz(calculateBuchholz(p)));
+        players.forEach(p -> p.setFeinBuchholz(calculateFeinBuchholz(p)));
     }
 
     /**
-     * Calculates the number of wins for the player based on all matches played.
+     * Removes duplicate bye matches (matches with {@code secondPlayer == null}) from the list of all matches.
      *
-     * @param player The player for whom wins are to be calculated.
-     * @return The number of wins for the player.
-     */
-    private int calculateWins(Player player) {
-        return (int) allMatches.stream()
-                .filter(match -> isPlayerInMatch(match, player))
-                .filter(match -> match.getSecondPlayer() == null || didPlayerWinMatch(match, player))
-                .count();
-    }
-
-    /**
-     * Determines if the specified player won the given match based on the match result.
+     * <p>This method ensures that each player can have at most one bye match in the tournament.
+     * If a player is found to have multiple bye entries in {@code allMatches}, only the first one is retained and the rest are removed.</p>
      *
-     * @param match The match in which to determine the player's win.
-     * @param player The player to check if they won the match.
-     * @return true if the player won the match, false otherwise.
+     * <p>This should be called before calculating player statistics to prevent unfair point allocation due to duplicate byes.</p>
      */
-    private boolean didPlayerWinMatch(Match match, Player player) {
-        String[] result = match.getOverallResult().split(":");
-        if (result.length != 2) {
-            return false;
-        }
+    private void removeDuplicateByeMatches() {
+        Set<Player> seenPlayers = new HashSet<>();
+        Iterator<Match> iterator = allMatches.iterator();
 
-        int firstPlayerSets = Integer.parseInt(result[0]);
-        int secondPlayerSets = Integer.parseInt(result[1]);
-
-        return (match.getFirstPlayer().equals(player) && firstPlayerSets > secondPlayerSets) ||
-                (match.getSecondPlayer().equals(player) && secondPlayerSets > firstPlayerSets);
-    }
-
-    /**
-     * Calculates the number of losses for the specified player in all matches.
-     *
-     * @param player The player for whom to calculate losses.
-     * @return The number of losses for the player.
-     */
-    private int calculateLosses(Player player) {
-        return (int) allMatches.stream()
-                .filter(match -> isPlayerInMatch(match, player))
-                .filter(match -> !match.getOverallResult().isEmpty() && !Objects.equals(match.getOverallResult(), ":"))
-                .filter(match -> match.getSecondPlayer() != null && !didPlayerWinMatch(match, player))
-                .count();
-    }
-
-    /**
-     * Calculates the total number of sets won by the specified player in all matches.
-     *
-     * @param player The player for whom to calculate sets won.
-     * @return The total number of sets won by the player.
-     */
-    private int calculateSetsWon(Player player) {
-        return allMatches.stream()
-                .filter(match -> isPlayerInMatch(match, player))
-                .mapToInt(match -> calculateMatchSetsWon(match, player))
-                .sum();
-    }
-
-    /**
-     * Calculates the number of sets won by the specified player in a specific match.
-     *
-     * @param match The match in which to calculate sets won.
-     * @param player The player for whom to calculate sets won.
-     * @return The number of sets won by the player in the match.
-     */
-    private int calculateMatchSetsWon(Match match, Player player) {
-        if (match.getFirstPlayer().equals(player) && match.getSecondPlayer() == null) {
-            return 3;
-        }
-
-        String[] result = match.getOverallResult().split(":");
-        if (result.length != 2) {
-            return 0;
-        }
-
-        return match.getFirstPlayer().equals(player) ? Integer.parseInt(result[0]) : Integer.parseInt(result[1]);
-    }
-
-    /**
-     * Calculates the number of sets lost by the specified player in all matches.
-     *
-     * @param player The player for whom to calculate sets lost.
-     * @return The total number of sets lost by the player in all matches.
-     */
-    private int calculateSetsLost(Player player) {
-        return allMatches.stream()
-                .filter(match -> isPlayerInMatch(match, player))
-                .mapToInt(match -> calculateMatchSetsLost(match, player))
-                .sum();
-    }
-
-    /**
-     * Calculates the number of sets lost by the specified player in a particular match.
-     *
-     * @param match The match to calculate sets lost from.
-     * @param player The player for whom to calculate sets lost.
-     * @return The number of sets lost by the player in the match.
-     */
-    private int calculateMatchSetsLost(Match match, Player player) {
-        String[] result = match.getOverallResult().split(":");
-        if (result.length != 2) {
-            return 0;
-        }
-
-        return match.getFirstPlayer().equals(player) ? Integer.parseInt(result[1]) : Integer.parseInt(result[0]);
-    }
-
-    /**
-     * Calculates the total number of balls won by the specified player across all matches.
-     *
-     * @param player The player for whom to calculate balls won.
-     * @return The total number of balls won by the player.
-     */
-    private int calculateBallsWon(Player player) {
-        return allMatches.stream()
-                .filter(match -> isPlayerInMatch(match, player))
-                .mapToInt(match -> calculateMatchBallsWon(match, player))
-                .sum();
-    }
-
-    /**
-     * Calculates the total number of balls won by the specified player in the given match.
-     *
-     * @param match  The match in which to calculate balls won.
-     * @param player The player for whom to calculate balls won.
-     * @return The total number of balls won by the player in the match.
-     */
-    private int calculateMatchBallsWon(Match match, Player player) {
-        if (match.getFirstPlayer().equals(player) && match.getSecondPlayer() == null) {
-            return 33;
-        }
-
-        String[][] result = match.getResults();
-        if (match.getFirstPlayer().equals(player)) {
-            return Arrays.stream(result)
-                    .filter(sets -> sets[0] != null && !sets[0].isEmpty())
-                    .mapToInt(sets -> Integer.parseInt(sets[0]))
-                    .sum();
-        } else {
-            return Arrays.stream(result)
-                    .filter(sets -> sets[1] != null && !sets[1].isEmpty())
-                    .mapToInt(sets -> Integer.parseInt(sets[1]))
-                    .sum();
-        }
-    }
-
-    /**
-     * Calculates the total number of balls lost by the specified player in all matches.
-     *
-     * @param player The player for whom to calculate balls lost.
-     * @return The total number of balls lost by the player.
-     */
-    private int calculateBallsLost(Player player) {
-        return allMatches.stream()
-                .filter(match -> isPlayerInMatch(match, player))
-                .mapToInt(match -> calculateMatchBallsLost(match, player))
-                .sum();
-    }
-
-    /**
-     * Calculates the total number of balls lost by the specified player in the given match.
-     *
-     * @param match The match in which to calculate balls lost.
-     * @param player The player for whom to calculate balls lost.
-     * @return The total number of balls lost by the player in the match.
-     */
-    private int calculateMatchBallsLost(Match match, Player player) {
-        String[][] result = match.getResults();
-        if (match.getFirstPlayer().equals(player)) {
-            return Arrays.stream(result)
-                    .filter(sets -> sets[1] != null && !sets[1].isEmpty())
-                    .mapToInt(sets -> Integer.parseInt(sets[1]))
-                    .sum();
-        } else {
-            return Arrays.stream(result)
-                    .filter(sets -> sets[0] != null && !sets[0].isEmpty())
-                    .mapToInt(sets -> Integer.parseInt(sets[0]))
-                    .sum();
+        while (iterator.hasNext()) {
+            Match match = iterator.next();
+            if (match.getSecondPlayer() == null) {
+                Player byePlayer = match.getFirstPlayer();
+                if (!seenPlayers.add(byePlayer)) {
+                    iterator.remove();
+                }
+            }
         }
     }
 
@@ -1043,6 +902,7 @@ public class TournamentRound extends JFrame {
      */
     private int calculateBuchholz(Player player) {
         return allMatches.stream()
+                .filter(match -> !match.isEvaluated())
                 .filter(match -> isPlayerInMatch(match, player) && match.getSecondPlayer() != null)
                 .mapToInt(match -> getOpponentPoints(match, player))
                 .sum();
@@ -1056,6 +916,7 @@ public class TournamentRound extends JFrame {
      */
     private int calculateFeinBuchholz(Player player) {
         return allMatches.stream()
+                .filter(match -> !match.isEvaluated())
                 .filter(match -> isPlayerInMatch(match, player) && match.getSecondPlayer() != null)
                 .mapToInt(match -> getOpponentBuchholz(match, player))
                 .sum();
@@ -1119,6 +980,7 @@ public class TournamentRound extends JFrame {
         matches.clear();
         pairingsTextArea.setText("");
         generatePairings(new HashSet<>());
+        saveTournamentState();
         updateResultsTable();
     }
 
@@ -1246,6 +1108,65 @@ public class TournamentRound extends JFrame {
             String playerInfo = match.getFirstPlayer().getFullName() + " - Freilos";
             pairingsTextArea.append(playerInfo + "\n");
         });
+    }
+
+    /**
+     * Saves the current tournament state to a file in the user's Documents directory.
+     *
+     * <p>The file name is automatically generated based on the tournament name and saved
+     * as a serialized {@link TournamentState} object with a ".ser" extension. Invalid characters
+     * in the tournament name are sanitized to ensure a valid file name.</p>
+     *
+     * <p>The saved state includes all players, completed matches, current round pairings,
+     * the current round number, completion status, and tournament settings.</p>
+     *
+     * <p>If an error occurs during saving, an error dialog is displayed to the user.</p>
+     */
+    private void saveTournamentState() {
+        String fileName = tournamentName.replaceAll("[^a-zA-Z0-9-_.]", "_") + ".ser";
+        File documentsDir = new File(System.getProperty("user.home"), "Documents");
+        File file = new File(documentsDir, fileName);
+
+        TournamentState state = new TournamentState(
+                playerList, allMatches, new ArrayList<>(matches), currentRound, finished,
+                tournamentName, tableNumber, modus
+        );
+
+        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))) {
+            out.writeObject(state);
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Fehler beim Speichern.", "Fehler", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Reconstructs a tournament round from a previously saved {@link TournamentState}.
+     *
+     * <p>This method creates a new {@link TournamentRound} instance and restores its internal state based on the data
+     * from a saved file, including the list of players, round number, mode (Swiss or round-robin),
+     * all previously played matches, and the current round's match pairings.</p>
+     *
+     * <p>After restoring the data, the results table is refreshed to reflect the loaded state.</p>
+     *
+     * @param state the saved {@link TournamentState} instance containing all relevant tournament data
+     * @return a new {@link TournamentRound} object initialized to the saved state
+     */
+    public static TournamentRound fromSavedState(TournamentState state) {
+        TournamentRound round = new TournamentRound(
+                new ArrayList<>(state.playerList()),
+                state.tournamentName(),
+                state.tableCount(),
+                state.modus()
+        );
+        round.currentRound = state.currentRound();
+        round.finished = state.finished();
+        round.allMatches.addAll(state.allMatches());
+        round.matches.clear();
+        round.matches.addAll(state.matches());
+
+        round.updateResultsTable();
+
+        return round;
     }
 
 }

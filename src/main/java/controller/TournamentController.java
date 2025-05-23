@@ -1,11 +1,17 @@
 package controller;
 
 import model.Player;
+import model.TournamentState;
 import view.TournamentView;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.ArrayList;
 
 /**
@@ -28,6 +34,7 @@ public class TournamentController {
         view.getAddPlayerButton().addActionListener(e -> addPlayer());
         view.getRemovePlayerButton().addActionListener(e -> removePlayer());
         view.getBeginTournamentButton().addActionListener(e -> beginTournament());
+        view.getLoadMenuItem().addActionListener(e -> loadTournamentFromFile());
 
         view.addWindowListener(new WindowAdapter() {
             @Override
@@ -166,5 +173,40 @@ public class TournamentController {
             new TournamentController(view);
             view.setVisible(true);
         });
+    }
+
+    /**
+     * Opens a file chooser dialog to load a previously saved tournament state from a .ser file.
+     *
+     * <p>This method displays a {@link JFileChooser} restricted to files with the {@code .ser} extension
+     * and prompts the user to select a tournament save file. If a valid file is selected, the method attempts
+     * to deserialize it into a {@link TournamentState} object and restore the tournament via
+     * {@link TournamentRound#fromSavedState(TournamentState)}.</p>
+     *
+     * <p>If the loading process is successful, the current tournament setup view is closed and the restored
+     * tournament round is made visible. In case of errors during file reading or deserialization,
+     * an error dialog is shown to the user.</p>
+     */
+    private void loadTournamentFromFile() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Turnier-Dateien (*.ser)", "ser"));
+        fileChooser.setDialogTitle("Turnierstand laden");
+
+        int result = fileChooser.showOpenDialog(view);
+
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+
+            try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
+                TournamentState state = (TournamentState) in.readObject();
+
+                TournamentRound round = TournamentRound.fromSavedState(state);
+                round.setVisible(true);
+                view.dispose();
+
+            } catch (IOException | ClassNotFoundException e) {
+                JOptionPane.showMessageDialog(view, "Fehler beim Laden der Datei.", "Fehler", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 }
