@@ -1,45 +1,95 @@
-# TableTennisTournamentSoftware
+# 🏓 TableTennisTournamentSoftware
 
-## 🏓 Overview
-**TableTennisTournamentSoftware** is a Java-based desktop application for organizing and managing table tennis tournaments.  
-It supports both **Swiss-system** and **round-robin** (Jeder-gegen-Jeden) formats and offers a graphical user interface to streamline tournament setup, player management, result tracking, and printing.
+## Übersicht
 
----
-
-## ✨ Features
-
-- ✅ **Automatic saving** at the beginning of each new round
-- 🔁 **Resume unfinished tournaments** by loading previously saved states
-- 👥 **Player & tournament setup**: Add/remove players, define tournament name, table count, and match format
-- 📋 **Tournament progression**: Display match pairings and update the current standings
-- 🪑 **Automatic table assignment** for each match
-- 🕳️ **Bye match support** for tournaments with an odd number of players
-- 🧮 **Score entry**: Input set-level and overall match results
-- 🖨️ **Printable referee sheets** for all current matches
-- 🛠️ **Manual match pairing override** (Swiss-system only)
+**TableTennisTournamentSoftware** ist eine Java-basierte Desktop-Anwendung zur Verwaltung von Tischtennisturnieren.  
+Sie unterstützt sowohl das **Schweizer System** als auch den Modus **„Jeder gegen Jeden“** und bietet eine benutzerfreundliche Oberfläche für Spielerverwaltung, Auslosung, Ergebniseingabe und Schiedsrichterzettel.
 
 ---
 
-## ⚠ Limitations
+## ✨ Funktionen
 
-- ❌ Currently no manual save function – saving is done automatically
-- 🧪 Slightly simplified Swiss pairing logic (non-official TTR rules)
-
----
-
-## 📂 Usage Restrictions
-
-> **This software is intended for non-commercial use only.  
-> It must not be used for official TTR-relevant competitions.**
-
----
-
-## 📝 License
-
-[**Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+- ✅ **Automatisches Speichern** zu Beginn jeder neuen Runde (Dateiname basiert auf Turniername)
+- 🔁 **Fortsetzen unterbrochener Turniere** durch Laden gespeicherter `.ser`-Dateien
+- 👥 **Spieler- und Turnierverwaltung**: Hinzufügen/Entfernen von Spielern, Turniername, Tischanzahl, Moduswahl
+- 📋 **Turnierablauf**: automatische oder manuelle Auslosung, Anzeige der laufenden Runde
+- 🪑 **Automatische Tischzuweisung** für jede Begegnung
+- 🕳️ **Freilos-Unterstützung**: bei ungerader Teilnehmerzahl erhält eine Person ein 3:0-Freilos mit 33:0 Punkten
+- 🧮 **Ergebniseingabe**: satzweise Eingabe mit automatischer Gesamtberechnung
+- 🖨️ **Schiedsrichterzettel**: Anzeigen und Drucken pro Tisch
+- 🛠️ **Manuelle Anpassung der Setzung** (nur im Schweizer System) möglich
+- 🔒 **Datenkonsistenz**: keine mehrfachen Freilose, keine doppelte Auswertung bereits gewerteter Spiele
 
 ---
 
-## 👨‍💻 Author
+## 📊 Ranglistenberechnung
+
+- Die Rangliste wird nach jedem Durchlauf auf Basis folgender Kriterien aktualisiert:
+    - Punkte (1 Punkt pro Sieg oder Freilos)
+    - Siege und Niederlagen
+    - Satzverhältnis, Ballverhältnis
+    - Buchholz & Fein-Buchholz (nur im Schweizer System)
+- Jedes Match wird **nur einmal** gewertet – auch nach dem Laden (über internes Flag `evaluated`)
+- Freilos-Spiele zählen als 3:0 mit 33:0 Bällen
+
+---
+
+## 📂 Dateiverwaltung
+
+- Alle gespeicherten Turniere werden als `.ser`-Dateien im **„Dokumente“-Ordner des aktuellen Benutzers** abgelegt
+- Der Dateiname wird automatisch aus dem Turniernamen generiert (Sonderzeichen werden ersetzt)
+- Über den Menüpunkt **„Turnier laden“** kann eine gespeicherte Datei geöffnet und fortgesetzt werden
+
+---
+
+## ⚠ Einschränkungen
+
+- ❌ Kein manuelles Speichern durch Benutzer – nur automatisches Speichern vor neuer Runde
+- 🧪 Die Setzlogik im Schweizer System ist leicht vereinfacht und **nicht TTR-konform**
+
+---
+
+## ⚙️ Systemanforderungen & Ausführung
+
+- **Java-Version**: Java 17 oder höher erforderlich
+- **Empfohlene Ausführung**:
+    - Direkt in einer IDE wie IntelliJ IDEA oder Eclipse
+    - Oder über Konsole:
+
+```bash
+javac -d out src/**/*.java
+java -cp out controller.TournamentController
+```
+
+---
+
+## 🛡️ Fehlerbehandlung & Stabilität
+
+- Spieler können **maximal ein Freilos** erhalten – doppelte Einträge werden automatisch entfernt
+- Bereits bewertete Spiele werden **nicht doppelt ausgewertet**
+- Fehler beim Speichern/Laden werden benutzerfreundlich über Dialogfenster gemeldet
+
+---
+
+## 🧩 Projektstruktur (für Entwickler)
+
+- `controller` – Steuerung der Turnierlogik, UI-Aktionen, Speichern/Laden
+- `model` – Datenklassen wie `Player`, `Match`, `TournamentState`
+- `view` – Swing-basierte Benutzeroberfläche (Erfassung, Tabellen, Menü, Zettel etc.)
+- Einstiegspunkt: `TournamentController.main()`  
+  Lädt das Hauptfenster und koordiniert den Ablauf
+
+---
+
+## 📜 Lizenz
+
+[**Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.de)
+
+> **Die Software ist ausschließlich für nicht-kommerzielle, nicht-TTR-relevante Turniere gedacht.**  
+> Eine Nutzung in offiziellen oder leistungsrelevanten Wettkämpfen ist untersagt.
+
+---
+
+## 👨‍💻 Autor
 
 **Mathias Weklak**
