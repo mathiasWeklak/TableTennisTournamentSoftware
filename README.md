@@ -4,6 +4,9 @@
 Die TableTennisTournamentSoftware ist eine Java-basierte Anwendung zur Verwaltung von Tischtennisturnieren. Sie bietet eine Benutzeroberfläche für die Organisation von Spielern, die Eingabe von Turnierdetails und die Durchführung von Turnieren. Unterstützt werden Turniere im Modus "Schweizer System" und "Jeder gegen Jeden".
 
 ## Funktionalitäten
+- **Automatisches Speichern des Turniers zu Beginn jeder neuen Runde
+- **Möglichkeit zum Laden gespeicherter Turniere
+- **Geladene und noch nicht beendete Turniere können fortgesetzt werden
 - **Spieler- und Turnierverwaltung**: Hinzufügen und Entfernen von Spielern, Festlegen von Turniernamen und Tischanzahl.
 - **Turnierablauf**: Anzeige der (ausgelosten) Begegnungen und der aktuellen Tabellen.
 - **Tischzulosungen**: Tische werden automatisch zugelost.
