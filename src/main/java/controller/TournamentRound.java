@@ -801,6 +801,17 @@ public class TournamentRound extends JFrame {
      *
      * @param players the list of all tournament players whose statistics should be updated
      */
+    /**
+     * Calculates all relevant tournament statistics for each player, including:
+     * points, wins/losses, sets, balls, Buchholz (BHZ), and Fein-Buchholz (fBHZ).
+     *
+     * This method ensures:
+     * - Resetting all stats per player
+     * - Evaluating each match exactly once
+     * - Calculating Buchholz values after all points are finalized
+     *
+     * @param players the list of players whose stats will be updated
+     */
     private void calculateSwissSystemScores(List<Player> players) {
         players.forEach(player -> {
             player.setPoints(0);
@@ -902,7 +913,6 @@ public class TournamentRound extends JFrame {
      */
     private int calculateBuchholz(Player player) {
         return allMatches.stream()
-                .filter(match -> !match.isEvaluated())
                 .filter(match -> isPlayerInMatch(match, player) && match.getSecondPlayer() != null)
                 .mapToInt(match -> getOpponentPoints(match, player))
                 .sum();
@@ -916,7 +926,6 @@ public class TournamentRound extends JFrame {
      */
     private int calculateFeinBuchholz(Player player) {
         return allMatches.stream()
-                .filter(match -> !match.isEvaluated())
                 .filter(match -> isPlayerInMatch(match, player) && match.getSecondPlayer() != null)
                 .mapToInt(match -> getOpponentBuchholz(match, player))
                 .sum();
