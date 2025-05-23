@@ -16,7 +16,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("controller.TournamentSoftware")
+    mainClass.set("controller.TournamentController")
 }
 
 tasks.withType<JavaCompile> {
