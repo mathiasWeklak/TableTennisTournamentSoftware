@@ -45,20 +45,26 @@ Sie unterstützt sowohl das **Schweizer System** als auch den Modus **„Jeder g
 ## ⚠ Einschränkungen
 
 - ❌ Kein manuelles Speichern durch Benutzer – nur automatisches Speichern vor neuer Runde
-- 🧪 Die Setzlogik im Schweizer System ist leicht vereinfacht und **nicht TTR-konform**
+- 🧪 Die Setzlogik im Schweizer System bevorzugt gleiche Standings, ist aber **nicht offiziell TTR-konform**
 
 ---
 
 ## ⚙️ Systemanforderungen & Ausführung
 
-- **Java-Version**: Java 17 oder höher erforderlich
+- **Java-Version**: Java 21 oder höher erforderlich
 - **Empfohlene Ausführung**:
     - Direkt in einer IDE wie IntelliJ IDEA oder Eclipse
-    - Oder über Konsole:
+    - Oder über Gradle:
 
 ```bash
-javac -d out src/**/*.java
-java -cp out controller.TournamentController
+# Anwendung starten
+./gradlew run
+
+# Tests ausführen
+./gradlew test
+
+# Ausführbare JAR erstellen
+./gradlew build
 ```
 
 ---
@@ -73,8 +79,9 @@ java -cp out controller.TournamentController
 
 ## 🧩 Projektstruktur (für Entwickler)
 
-- `controller` – Steuerung der Turnierlogik, UI-Aktionen, Speichern/Laden
-- `model` – Datenklassen wie `Player`, `Match`, `TournamentState`
+- `controller` – Turnierlogik, UI-Aktionen, Speichern/Laden; enthält `PairingEngine` (Auslosung) und `ScoreCalculator` (Wertung)
+- `model` – Datenklassen: `Player`, `Match`, `TournamentState`
+- `simulation` – `TournamentSimulation`: GUI-freie Simulation zum Testen der Auslosungslogik
 - `view` – Swing-basierte Benutzeroberfläche (Erfassung, Tabellen, Menü, Zettel etc.)
 - Einstiegspunkt: `TournamentController.main()`  
   Lädt das Hauptfenster und koordiniert den Ablauf

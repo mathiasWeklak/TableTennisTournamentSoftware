@@ -3,12 +3,9 @@ package view;
 import model.Match;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
-/**
- * View class for managing the display and interaction of possible and selected matches.
- * Provides a user interface to manage match selections for a tournament.
- */
 public class MatchManagerView extends JFrame {
     private final JList<Match> possibleMatchesList;
     private final JList<Match> selectedMatchesList;
@@ -16,20 +13,14 @@ public class MatchManagerView extends JFrame {
     private final JButton upButton;
     private final JButton commitButton;
 
-    /**
-     * Constructs a MatchManagerView with the specified models and player count.
-     *
-     * @param possibleMatchesModel  The model containing possible matches.
-     * @param selectedMatchesModel  The model containing selected matches.
-     * @param playerCount           The total number of players.
-     */
     public MatchManagerView(DefaultListModel<Match> possibleMatchesModel,
                             DefaultListModel<Match> selectedMatchesModel, int playerCount) {
 
         setTitle("Begegnungs Manager");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(600, 700);
+        setSize(680, 750);
         setLayout(new BorderLayout());
+        getContentPane().setBackground(UITheme.BACKGROUND);
 
         possibleMatchesList = new JList<>(possibleMatchesModel);
         selectedMatchesList = new JList<>(selectedMatchesModel);
@@ -37,96 +28,107 @@ public class MatchManagerView extends JFrame {
         possibleMatchesList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         selectedMatchesList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
+        possibleMatchesList.setFont(UITheme.FONT_BODY);
+        possibleMatchesList.setFixedCellHeight(28);
+        possibleMatchesList.setBackground(UITheme.SURFACE);
+        possibleMatchesList.setSelectionBackground(new Color(187, 222, 251));
+
+        selectedMatchesList.setFont(UITheme.FONT_BODY);
+        selectedMatchesList.setFixedCellHeight(28);
+        selectedMatchesList.setBackground(UITheme.SURFACE);
+        selectedMatchesList.setSelectionBackground(new Color(187, 222, 251));
+
         possibleMatchesList.setCellRenderer(new MatchRenderer());
         selectedMatchesList.setCellRenderer(new MatchRenderer());
 
-        downButton = new JButton("↓");
-        upButton = new JButton("↑");
+        downButton = UITheme.createPrimaryButton("Auswählen  ↓");
+        upButton = UITheme.createSecondaryButton("↑  Entfernen");
 
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new GridLayout(1, 2));
-        buttonPanel.add(downButton);
-        buttonPanel.add(upButton);
+        JPanel arrowPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+        arrowPanel.setBackground(UITheme.BACKGROUND);
+        arrowPanel.add(downButton);
+        arrowPanel.add(upButton);
 
         JScrollPane possibleScrollPane = new JScrollPane(possibleMatchesList);
-        possibleScrollPane.setPreferredSize(new Dimension(600, 450));
-        possibleScrollPane.setBorder(BorderFactory.createTitledBorder("Alle möglichen Begegnungen"));
+        possibleScrollPane.setBorder(null);
 
+        JPanel possibleCard = new JPanel(new BorderLayout(0, 0));
+        possibleCard.setBackground(UITheme.BACKGROUND);
+        possibleCard.setBorder(new EmptyBorder(12, 12, 0, 12));
+
+        JPanel possibleInner = new JPanel(new BorderLayout());
+        possibleInner.setBackground(UITheme.SURFACE);
+        possibleInner.setBorder(UITheme.cardBorder("Alle möglichen Begegnungen"));
+        possibleInner.add(possibleScrollPane, BorderLayout.CENTER);
+        possibleCard.add(possibleInner, BorderLayout.CENTER);
+
+        int required = playerCount / 2 + playerCount % 2;
         JScrollPane selectedScrollPane = new JScrollPane(selectedMatchesList);
-        selectedScrollPane.setPreferredSize(new Dimension(600, 150));
-        selectedScrollPane.setBorder(BorderFactory.createTitledBorder("Ausgewählte Begegnungen (Es müssen genau " + (playerCount / 2 + (playerCount % 2)) + " ausgewählt werden!)"));
+        selectedScrollPane.setBorder(null);
+        selectedScrollPane.setPreferredSize(new Dimension(0, 160));
 
-        commitButton = new JButton("Ausgewählte Begegnungen als neue Setzung übernehmen");
+        JPanel selectedCard = new JPanel(new BorderLayout(0, 0));
+        selectedCard.setBackground(UITheme.BACKGROUND);
+        selectedCard.setBorder(new EmptyBorder(0, 12, 12, 12));
 
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.add(possibleScrollPane, BorderLayout.CENTER);
-        topPanel.add(buttonPanel, BorderLayout.SOUTH);
+        JPanel selectedInner = new JPanel(new BorderLayout());
+        selectedInner.setBackground(UITheme.SURFACE);
+        selectedInner.setBorder(UITheme.cardBorder(
+            "Ausgewählte Begegnungen  (genau " + required + " erforderlich)"
+        ));
+        selectedInner.add(selectedScrollPane, BorderLayout.CENTER);
+        selectedCard.add(selectedInner, BorderLayout.CENTER);
+
+        commitButton = UITheme.createPrimaryButton("Ausgewählte Begegnungen als neue Setzung übernehmen");
 
         JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.add(selectedScrollPane, BorderLayout.CENTER);
-        bottomPanel.add(commitButton, BorderLayout.SOUTH);
+        bottomPanel.setBackground(UITheme.BACKGROUND);
+        bottomPanel.add(selectedCard, BorderLayout.CENTER);
 
-        add(topPanel, BorderLayout.NORTH);
-        add(bottomPanel, BorderLayout.CENTER);
+        JPanel commitPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
+        commitPanel.setBackground(UITheme.BACKGROUND);
+        commitPanel.add(commitButton);
+        bottomPanel.add(commitPanel, BorderLayout.SOUTH);
+
+        add(possibleCard, BorderLayout.CENTER);
+        add(arrowPanel, BorderLayout.NORTH);
+        add(bottomPanel, BorderLayout.SOUTH);
     }
 
-    /**
-     * Gets the list of possible matches.
-     *
-     * @return The JList of possible matches.
-     */
     public JList<Match> getPossibleMatchesList() {
         return possibleMatchesList;
     }
 
-    /**
-     * Gets the list of selected matches.
-     *
-     * @return The JList of selected matches.
-     */
     public JList<Match> getSelectedMatchesList() {
         return selectedMatchesList;
     }
 
-    /**
-     * Gets the button for moving a match to the selected list.
-     *
-     * @return The JButton for moving a match down.
-     */
     public JButton getDownButton() {
         return downButton;
     }
 
-    /**
-     * Gets the button for moving a match to the possible list.
-     *
-     * @return The JButton for moving a match up.
-     */
     public JButton getUpButton() {
         return upButton;
     }
 
-    /**
-     * Gets the button for committing the selected matches.
-     *
-     * @return The JButton for committing selected matches.
-     */
     public JButton getCommitButton() {
         return commitButton;
     }
 
-    /**
-     * Custom cell renderer for displaying matches in the lists.
-     */
     private static class MatchRenderer extends DefaultListCellRenderer {
         @Override
         public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            setFont(UITheme.FONT_BODY);
+            if (!isSelected) {
+                setBackground(index % 2 == 0 ? UITheme.SURFACE : UITheme.ROW_ALT);
+            }
+            setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
             if (value instanceof Match match) {
                 if (match.getSecondPlayer() == null) {
-                    setText(match.getFirstPlayer().getFullName() + " - Freilos");
+                    setText(match.getFirstPlayer().getFullName() + "  —  Freilos");
                 } else {
-                    setText(match.getFirstPlayer().getFullName() + " vs " + match.getSecondPlayer().getFullName());
+                    setText(match.getFirstPlayer().getFullName() + "  vs  " + match.getSecondPlayer().getFullName());
                 }
             }
             return this;

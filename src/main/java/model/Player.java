@@ -2,6 +2,7 @@ package model;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Represents a player participating in a table tennis tournament.
@@ -212,5 +213,19 @@ public class Player implements Serializable {
 
     public void setBallsLost(int ballsLost) {
         this.ballsLost = ballsLost;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Player other)) return false;
+        return Objects.equals(firstName, other.firstName)
+                && Objects.equals(lastName, other.lastName)
+                && Objects.equals(club, other.club);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(firstName, lastName, club);
     }
 }

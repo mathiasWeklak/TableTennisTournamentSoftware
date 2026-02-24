@@ -1,12 +1,9 @@
 package view;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
-/**
- * View class for managing a table tennis tournament GUI.
- * Provides fields and methods to interact with tournament data and UI elements.
- */
 public class TournamentView extends JFrame {
     private final JList<String> playerJList;
     private final DefaultListModel<String> playerListModel;
@@ -18,151 +15,143 @@ public class TournamentView extends JFrame {
     private final JButton beginTournamentButton;
     private final JMenuItem loadMenuItem;
 
-    /**
-     * Constructs a TournamentView GUI.
-     */
     public TournamentView() {
         setTitle("Tischtennis Turniersoftware");
-        setSize(600, 300);
+        setSize(780, 540);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());
+        getContentPane().setBackground(UITheme.BACKGROUND);
+
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(UITheme.PRIMARY);
+        headerPanel.setBorder(new EmptyBorder(14, 20, 14, 20));
+        JLabel headerLabel = new JLabel("Tischtennis Turniersoftware");
+        headerLabel.setFont(UITheme.FONT_TITLE);
+        headerLabel.setForeground(Color.WHITE);
+        headerPanel.add(headerLabel, BorderLayout.WEST);
+
+        JPanel formCard = new JPanel(new GridBagLayout());
+        formCard.setBackground(UITheme.SURFACE);
+        formCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER_COLOR),
+            new EmptyBorder(12, 20, 12, 20)
+        ));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 8, 4, 8);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        gbc.gridx = 0; gbc.gridy = 0; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        formCard.add(makeLabel("Turniername:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        tournamentNameField = new JTextField(20);
+        tournamentNameField.setFont(UITheme.FONT_BODY);
+        formCard.add(tournamentNameField, gbc);
+
+        gbc.gridx = 2; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        formCard.add(makeLabel("Anzahl Tische:"), gbc);
+        gbc.gridx = 3;
+        tableCountField = new JTextField(5);
+        tableCountField.setFont(UITheme.FONT_BODY);
+        formCard.add(tableCountField, gbc);
+
+        gbc.gridx = 4;
+        formCard.add(makeLabel("Jeder gegen Jeden:"), gbc);
+        gbc.gridx = 5;
+        modusField = new JCheckBox();
+        formCard.add(modusField, gbc);
+
+        JPanel playerCard = new JPanel(new BorderLayout(0, 6));
+        playerCard.setBackground(UITheme.BACKGROUND);
+        playerCard.setBorder(new EmptyBorder(12, 16, 12, 16));
+
+        JPanel playerInner = new JPanel(new BorderLayout(0, 6));
+        playerInner.setBackground(UITheme.SURFACE);
+        playerInner.setBorder(UITheme.cardBorder("Spielerliste"));
 
         playerListModel = new DefaultListModel<>();
         playerJList = new JList<>(playerListModel);
+        playerJList.setFont(UITheme.FONT_BODY);
+        playerJList.setBackground(UITheme.SURFACE);
+        playerJList.setSelectionBackground(new Color(187, 222, 251));
 
-        JPanel topPanel = new JPanel();
-        JLabel nameLabel = new JLabel("Turniername:");
-        tournamentNameField = new JTextField(15);
-        topPanel.add(nameLabel);
-        topPanel.add(tournamentNameField);
-
-        JLabel tableLabel = new JLabel("Anzahl der Tische:");
-        tableCountField = new JTextField(5);
-        topPanel.add(tableLabel);
-        topPanel.add(tableCountField);
-
-        JLabel modusCheckboxLabel = new JLabel("Jeder gegen Jeden?");
-        modusField = new JCheckBox();
-        topPanel.add(modusCheckboxLabel);
-        topPanel.add(modusField);
-
-        JPanel centerPanel = new JPanel(new BorderLayout());
-        JPanel playerPanel = new JPanel(new BorderLayout());
-        playerPanel.setBorder(BorderFactory.createTitledBorder("Spielerliste"));
         JScrollPane playerScrollPane = new JScrollPane(playerJList);
-        playerPanel.add(playerScrollPane, BorderLayout.CENTER);
+        playerInner.add(playerScrollPane, BorderLayout.CENTER);
 
-        JPanel buttonPanel = new JPanel();
-        addPlayerButton = new JButton("Spieler hinzufügen");
-        removePlayerButton = new JButton("Spieler entfernen");
-        buttonPanel.add(addPlayerButton);
-        buttonPanel.add(removePlayerButton);
-        playerPanel.add(buttonPanel, BorderLayout.SOUTH);
+        JPanel playerBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        playerBtns.setBackground(UITheme.SURFACE);
+        addPlayerButton = UITheme.createPrimaryButton("+ Spieler hinzufügen");
+        removePlayerButton = UITheme.createSecondaryButton("Spieler entfernen");
+        playerBtns.add(addPlayerButton);
+        playerBtns.add(removePlayerButton);
+        playerInner.add(playerBtns, BorderLayout.SOUTH);
+        playerCard.add(playerInner, BorderLayout.CENTER);
 
-        centerPanel.add(playerPanel, BorderLayout.CENTER);
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBackground(UITheme.BACKGROUND);
+        mainPanel.add(formCard, BorderLayout.NORTH);
+        mainPanel.add(playerCard, BorderLayout.CENTER);
 
-        add(topPanel, BorderLayout.NORTH);
-        add(centerPanel, BorderLayout.CENTER);
-
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        beginTournamentButton = new JButton("Turnier beginnen und erste Runde auslosen");
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 14));
+        bottomPanel.setBackground(UITheme.BACKGROUND);
+        beginTournamentButton = UITheme.createPrimaryButton("Turnier beginnen und erste Runde auslosen");
         bottomPanel.add(beginTournamentButton);
+
+        add(headerPanel, BorderLayout.NORTH);
+        add(mainPanel, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
 
         JMenuBar menuBar = new JMenuBar();
+        JMenu fileMenu = new JMenu("Datei");
+        fileMenu.setFont(UITheme.FONT_BODY);
         JMenuItem loadTournamentItem = new JMenuItem("Turnier laden");
-
-        menuBar.add(loadTournamentItem);
+        loadTournamentItem.setFont(UITheme.FONT_BODY);
+        fileMenu.add(loadTournamentItem);
+        menuBar.add(fileMenu);
         setJMenuBar(menuBar);
-
         this.loadMenuItem = loadTournamentItem;
     }
 
-    /**
-     * Gets the JList component displaying the list of players.
-     *
-     * @return The JList component for players.
-     */
+    private static JLabel makeLabel(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setFont(UITheme.FONT_BODY);
+        return lbl;
+    }
+
     public JList<String> getPlayerJList() {
         return playerJList;
     }
 
-    /**
-     * Gets the model associated with the player JList.
-     *
-     * @return The DefaultListModel containing player names.
-     */
     public DefaultListModel<String> getPlayerListModel() {
         return playerListModel;
     }
 
-    /**
-     * Gets the JTextField for entering the tournament name.
-     *
-     * @return The JTextField for tournament name input.
-     */
     public JTextField getTournamentNameField() {
         return tournamentNameField;
     }
 
-    /**
-     * Gets the JTextField for entering the number of tables.
-     *
-     * @return The JTextField for table count input.
-     */
     public JTextField getTableCountField() {
         return tableCountField;
     }
 
-    /**
-     * Gets the JCheckBox indicating the tournament mode.
-     *
-     * @return The JCheckBox indicating if it's a round-robin tournament.
-     */
     public JCheckBox getModusField() {
         return modusField;
     }
 
-    /**
-     * Gets the JButton for adding a new player to the tournament.
-     *
-     * @return The JButton for adding a player.
-     */
     public JButton getAddPlayerButton() {
         return addPlayerButton;
     }
 
-    /**
-     * Gets the JButton for removing a selected player from the tournament.
-     *
-     * @return The JButton for removing a player.
-     */
     public JButton getRemovePlayerButton() {
         return removePlayerButton;
     }
 
-    /**
-     * Gets the JButton for starting the tournament and drawing the first round.
-     *
-     * @return The JButton for beginning the tournament.
-     */
     public JButton getBeginTournamentButton() {
         return beginTournamentButton;
     }
 
-    /**
-     * Returns the menu item used to trigger loading a previously saved tournament.
-     *
-     * <p>This menu item is typically placed in the application's main menu bar
-     * and is associated with an {@link java.awt.event.ActionListener} that opens
-     * a file chooser dialog to load a serialized tournament state.</p>
-     *
-     * @return the {@link JMenuItem} for loading a saved tournament
-     */
     public JMenuItem getLoadMenuItem() {
         return loadMenuItem;
     }
-
-
 }

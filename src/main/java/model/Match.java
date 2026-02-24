@@ -2,6 +2,7 @@ package model;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Represents a match between two players in a tournament.
@@ -127,6 +128,23 @@ public class Match implements Serializable {
         this.evaluated = evaluated;
     }
 
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Match other)) return false;
+        return Objects.equals(firstPlayer, other.firstPlayer)
+                && Objects.equals(secondPlayer, other.secondPlayer)
+                || (Objects.equals(firstPlayer, other.secondPlayer)
+                && Objects.equals(secondPlayer, other.firstPlayer));
+    }
+
+    @Override
+    public int hashCode() {
+        int p1 = Objects.hashCode(firstPlayer);
+        int p2 = Objects.hashCode(secondPlayer);
+        return p1 < p2 ? Objects.hash(p1, p2) : Objects.hash(p2, p1);
+    }
 
     /**
      * Represents the set results of a match.

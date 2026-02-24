@@ -3,6 +3,7 @@
 plugins {
     id("java")
     application
+    jacoco
 }
 
 val licenseFile = project.file("LICENSE")
@@ -46,6 +47,14 @@ tasks.getByName("build").dependsOn("createExecutableJar")
 tasks.test {
     useJUnitPlatform()
     jvmArgs = listOf("-XX:+EnableDynamicAgentLoading")
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
 
 tasks.jar {

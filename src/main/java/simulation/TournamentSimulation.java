@@ -1,29 +1,69 @@
 package simulation;
 
-import controller.TournamentRound;
+import controller.PairingEngine;
+import controller.ScoreCalculator;
 import model.Player;
 import model.Match;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 
 public class TournamentSimulation {
-    private static final int NUMBER_OF_PLAYERS = 11;
-    private static final int NUMBER_OF_SIMULATIONS = 10;
-    private static final int MIN_ROUNDS = 6;
+    private static final int NUMBER_OF_PLAYERS = 9;
+    private static final int NUMBER_OF_SIMULATIONS = 10000;
+    private static final int MIN_ROUNDS = 7;
+    private static final int TABLE_COUNT = 4;
     private static final Random rand = new Random();
 
     public static void main(String[] args) {
-        List<Player> players = createPlayers(NUMBER_OF_PLAYERS);
-
+        int failures = 0;
         for (int i = 0; i < NUMBER_OF_SIMULATIONS; i++) {
-            TournamentRound tournament = new TournamentRound(players, "Test Turnier", 4, false);
-            simulateTournament(tournament);
-            if (tournament.getCurrentRound() < MIN_ROUNDS) {
-                break;
+            List<Player> players = createPlayers(NUMBER_OF_PLAYERS);
+            int rounds = runSimulation(players);
+            if (rounds < MIN_ROUNDS) {
+                failures++;
+                System.out.println("FEHLER Simulation " + (i + 1) + ": nur " + rounds + " Runden (erwartet >= " + MIN_ROUNDS + ")");
+            } else {
+                System.out.println("OK Simulation " + (i + 1) + ": " + rounds + " Runden gespielt");
             }
         }
+        int successes = NUMBER_OF_SIMULATIONS - failures;
+        System.out.println("\n========================================");
+        System.out.println("          SIMULATIONSBERICHT            ");
+        System.out.println("========================================");
+        System.out.println("Simulationen gesamt : " + NUMBER_OF_SIMULATIONS);
+        System.out.println("Spieleranzahl       : " + NUMBER_OF_PLAYERS);
+        System.out.println("Mindestrunden       : " + MIN_ROUNDS);
+        System.out.println("----------------------------------------");
+        System.out.println("Erfolgreich         : " + successes + " (" + (successes * 100 / NUMBER_OF_SIMULATIONS) + "%)");
+        System.out.println("Fehlgeschlagen      : " + failures  + " (" + (failures  * 100 / NUMBER_OF_SIMULATIONS) + "%)");
+        System.out.println("========================================");
+    }
+
+    private static int runSimulation(List<Player> players) {
+        PairingEngine engine = new PairingEngine(players, TABLE_COUNT, false);
+        ScoreCalculator scoreCalculator = new ScoreCalculator(engine.getAllMatches());
+
+        int round = 0;
+        String pairings = engine.generatePairings(new HashSet<>(), 1);
+
+        while (pairings != null) {
+            round++;
+            simulateMatches(engine.getMatches());
+
+            System.out.println("Runde " + round + ":");
+            printMatches(engine.getMatches());
+
+            scoreCalculator.calculate(players);
+            printCurrentTable(players);
+
+            engine.clearCurrentRound();
+            pairings = engine.generatePairings(new HashSet<>(), round + 1);
+        }
+
+        return round;
     }
 
     private static List<Player> createPlayers(int numberOfPlayers) {
@@ -34,22 +74,8 @@ public class TournamentSimulation {
         return players;
     }
 
-    private static void simulateTournament(TournamentRound tournament) {
-        while (!tournament.isFinished()) {
-            simulateMatches(tournament);
-
-            System.out.println("Runde " + tournament.getCurrentRound() + ":");
-            printMatches(tournament);
-
-            tournament.updateResultsTable();
-            printCurrentTable(tournament);
-
-            tournament.startNextRound();
-        }
-    }
-
-    private static void simulateMatches(TournamentRound tournament) {
-        for (Match match : tournament.getMatches()) {
+    private static void simulateMatches(List<Match> matches) {
+        for (Match match : matches) {
             if (match.getSecondPlayer() != null) {
                 int setsFirstPlayer = rand.nextInt(3) + 1;
                 int setsSecondPlayer = setsFirstPlayer == 3 ? rand.nextInt(2) + 1 : 3;
@@ -64,8 +90,8 @@ public class TournamentSimulation {
         }
     }
 
-    private static void printMatches(TournamentRound tournament) {
-        for (Match match : tournament.getMatches()) {
+    private static void printMatches(List<Match> matches) {
+        for (Match match : matches) {
             if (match.getSecondPlayer() == null) {
                 System.out.println("Freilos: " + match.getFirstPlayer().getFullName());
             } else {
@@ -74,11 +100,12 @@ public class TournamentSimulation {
         }
     }
 
-    private static void printCurrentTable(TournamentRound tournament) {
-        System.out.println("Aktuelle Tabelle nach Runde " + tournament.getCurrentRound() + ":");
-        List<Player> players = tournament.getPlayerList().reversed();
-        for (int i = 0; i < players.size(); i++) {
-            Player player = players.get(i);
+    private static void printCurrentTable(List<Player> players) {
+        List<Player> sorted = new ArrayList<>(players);
+        sorted.sort((a, b) -> b.getPoints() - a.getPoints());
+        System.out.println("Aktuelle Tabelle:");
+        for (int i = 0; i < sorted.size(); i++) {
+            Player player = sorted.get(i);
             String output = (i + 1) + ". " + player.getFullName() + " (" + player.getTtr() + " TTR)" +
                     " - Punkte: " + player.getPoints() +
                     ", Spiele: " + player.getWins() + ":" + player.getLosses() +

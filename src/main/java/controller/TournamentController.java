@@ -3,6 +3,7 @@ package controller;
 import model.Player;
 import model.TournamentState;
 import view.TournamentView;
+import view.UITheme;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -13,6 +14,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Controller class for managing the tournament setup and player management.
@@ -20,7 +22,7 @@ import java.util.ArrayList;
  */
 public class TournamentController {
     private final TournamentView view;
-    private final ArrayList<Player> playerList;
+    private final List<Player> playerList;
 
     /**
      * Constructs a TournamentController with the specified view.
@@ -168,6 +170,7 @@ public class TournamentController {
      * @param args Command-line arguments (unused).
      */
     public static void main(String[] args) {
+        UITheme.applyLookAndFeel();
         SwingUtilities.invokeLater(() -> {
             TournamentView view = new TournamentView();
             new TournamentController(view);

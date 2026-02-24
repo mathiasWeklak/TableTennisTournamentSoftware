@@ -1,4 +1,4 @@
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 import model.Player;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,5 +86,56 @@ public class PlayerTest {
     public void testGetAndSetBallsLost() {
         player.setBallsLost(80);
         assertEquals(80, player.getBallsLost());
+    }
+
+    @Test
+    public void testEquals_sameNameAndClub_areEqual() {
+        Player other = new Player("John", "Doe", "ClubA", 9999);
+        assertEquals(player, other);
+    }
+
+    @Test
+    public void testEquals_differentFirstName_notEqual() {
+        Player other = new Player("Jane", "Doe", "ClubA", 1500);
+        assertNotEquals(player, other);
+    }
+
+    @Test
+    public void testEquals_differentLastName_notEqual() {
+        Player other = new Player("John", "Smith", "ClubA", 1500);
+        assertNotEquals(player, other);
+    }
+
+    @Test
+    public void testEquals_differentClub_notEqual() {
+        Player other = new Player("John", "Doe", "ClubB", 1500);
+        assertNotEquals(player, other);
+    }
+
+    @Test
+    public void testEquals_sameReference_isEqual() {
+        assertEquals(player, player);
+    }
+
+    @Test
+    public void testEquals_null_notEqual() {
+        assertNotEquals(player, null);
+    }
+
+    @Test
+    public void testEquals_differentType_notEqual() {
+        assertNotEquals(player, "not a player");
+    }
+
+    @Test
+    public void testHashCode_equalPlayersHaveSameHashCode() {
+        Player other = new Player("John", "Doe", "ClubA", 9999);
+        assertEquals(player.hashCode(), other.hashCode());
+    }
+
+    @Test
+    public void testHashCode_differentPlayersHaveDifferentHashCode() {
+        Player other = new Player("Jane", "Doe", "ClubA", 1500);
+        assertNotEquals(player.hashCode(), other.hashCode());
     }
 }

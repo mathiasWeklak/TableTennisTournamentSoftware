@@ -1,5 +1,4 @@
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 import model.Match;
 import model.Player;
@@ -86,5 +85,78 @@ public class MatchTest {
         Match.Result result = new Match.Result();
         assertThrows(IllegalArgumentException.class, () -> result.setResults(0, null));
         assertThrows(IllegalArgumentException.class, () -> result.setResults(0, new String[]{"11-9"}));
+    }
+
+    @Test
+    public void testIsEvaluated_defaultFalse() {
+        assertFalse(match.isEvaluated());
+    }
+
+    @Test
+    public void testSetEvaluated_toTrue() {
+        match.setEvaluated(true);
+        assertTrue(match.isEvaluated());
+    }
+
+    @Test
+    public void testSetEvaluated_backToFalse() {
+        match.setEvaluated(true);
+        match.setEvaluated(false);
+        assertFalse(match.isEvaluated());
+    }
+
+    @Test
+    public void testByeMatch_secondPlayerIsNull() {
+        Match bye = new Match(player1, null, 3);
+        assertEquals(player1, bye.getFirstPlayer());
+        assertNull(bye.getSecondPlayer());
+        assertEquals(3, bye.getTableNumber());
+    }
+
+    @Test
+    public void testEquals_sameOrder() {
+        Match other = new Match(player1, player2, 99);
+        assertEquals(match, other);
+    }
+
+    @Test
+    public void testEquals_reverseOrder_isSymmetric() {
+        Match reversed = new Match(player2, player1, 1);
+        assertEquals(match, reversed);
+    }
+
+    @Test
+    public void testEquals_differentOpponent_notEqual() {
+        Player player3 = new Player("Jim", "Bean", "ClubC", 1700);
+        Match other = new Match(player1, player3, 1);
+        assertNotEquals(match, other);
+    }
+
+    @Test
+    public void testEquals_sameReference() {
+        assertEquals(match, match);
+    }
+
+    @Test
+    public void testEquals_null_notEqual() {
+        assertNotEquals(match, null);
+    }
+
+    @Test
+    public void testEquals_differentType_notEqual() {
+        assertNotEquals(match, "not a match");
+    }
+
+    @Test
+    public void testHashCode_symmetricMatches_haveSameHashCode() {
+        Match reversed = new Match(player2, player1, 99);
+        assertEquals(match.hashCode(), reversed.hashCode());
+    }
+
+    @Test
+    public void testHashCode_differentMatches_haveDifferentHashCode() {
+        Player player3 = new Player("Jim", "Bean", "ClubC", 1700);
+        Match other = new Match(player1, player3, 1);
+        assertNotEquals(match.hashCode(), other.hashCode());
     }
 }
