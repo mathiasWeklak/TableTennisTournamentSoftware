@@ -20,7 +20,7 @@ public class TournamentSimulation {
     public static void main(String[] args) {
         int failures = 0;
         for (int i = 0; i < NUMBER_OF_SIMULATIONS; i++) {
-            List<Player> players = createPlayers(NUMBER_OF_PLAYERS);
+            List<Player> players = createPlayers();
             int rounds = runSimulation(players);
             if (rounds < MIN_ROUNDS) {
                 failures++;
@@ -66,9 +66,9 @@ public class TournamentSimulation {
         return round;
     }
 
-    private static List<Player> createPlayers(int numberOfPlayers) {
+    private static List<Player> createPlayers() {
         List<Player> players = new ArrayList<>();
-        for (int i = 1; i <= numberOfPlayers; i++) {
+        for (int i = 1; i <= TournamentSimulation.NUMBER_OF_PLAYERS; i++) {
             players.add(new Player("Player" + i, "Last" + i, "Club" + i, rand.nextInt(2000) + 1000));
         }
         return players;

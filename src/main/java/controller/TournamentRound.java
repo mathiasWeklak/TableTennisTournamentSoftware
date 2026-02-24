@@ -35,7 +35,7 @@ public class TournamentRound extends JFrame {
     private final JTable resultsTable;
     private final JTextArea pairingsTextArea;
     private int currentRound;
-    private JLabel currentRoundLabel;
+    private final JLabel currentRoundLabel;
 
     /**
      * Constructs a new TournamentRound, sets up the UI, and generates the first round's pairings.
@@ -376,19 +376,8 @@ public class TournamentRound extends JFrame {
         return round;
     }
 
-    public int getCurrentRound() {
-        return this.currentRound;
-    }
-
-    public boolean isFinished() {
-        return pairingEngine.isFinished();
-    }
-
     public List<Match> getMatches() {
         return pairingEngine.getMatches();
     }
 
-    public List<Player> getPlayerList() {
-        return this.playerList;
-    }
 }

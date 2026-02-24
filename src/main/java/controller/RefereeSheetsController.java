@@ -6,15 +6,12 @@ import view.RefereeSheetsView;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.print.PageFormat;
 import java.awt.print.Printable;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
 import java.util.List;
 
-public class RefereeSheetsController {
-
-    private final List<Match> matches;
+public record RefereeSheetsController(List<Match> matches) {
 
     public RefereeSheetsController(List<Match> matches) {
         this.matches = matches;
@@ -61,18 +58,18 @@ public class RefereeSheetsController {
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g2.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
 
-            int pageWidth  = (int) pageFormat.getImageableWidth();
+            int pageWidth = (int) pageFormat.getImageableWidth();
             int pageHeight = (int) pageFormat.getImageableHeight();
 
             int startIdx = pageIndex * sheetsPerPage;
-            int endIdx   = Math.min(startIdx + sheetsPerPage, matches.size());
+            int endIdx = Math.min(startIdx + sheetsPerPage, matches.size());
 
             int gap = 20;
             int sheetHeight = (pageHeight - gap * (sheetsPerPage - 1)) / sheetsPerPage;
 
             for (int i = startIdx; i < endIdx; i++) {
                 int yOffset = (i - startIdx) * (sheetHeight + gap);
-                drawRefereeSheet(g2, matches.get(i), pageWidth, sheetHeight, 0, yOffset);
+                drawRefereeSheet(g2, matches.get(i), pageWidth, sheetHeight, yOffset);
             }
 
             return Printable.PAGE_EXISTS;
@@ -86,40 +83,39 @@ public class RefereeSheetsController {
         }
     }
 
-    private void drawRefereeSheet(Graphics2D g2, Match match, int width, int height, int x, int y) {
-        final int margin     = 8;
-        final int innerX     = x + margin;
+    private void drawRefereeSheet(Graphics2D g2, Match match, int width, int height, int y) {
+        final int margin = 8;
         final int innerWidth = width - margin * 2;
 
-        Font boldFont  = new Font("Arial", Font.BOLD, 11);
+        Font boldFont = new Font("Arial", Font.BOLD, 11);
         Font plainFont = new Font("Arial", Font.PLAIN, 11);
         Font titleFont = new Font("Arial", Font.BOLD, 13);
 
         g2.setColor(Color.BLACK);
         g2.setStroke(new BasicStroke(1.5f));
-        g2.drawRect(innerX, y, innerWidth, height - 4);
+        g2.drawRect(margin, y, innerWidth, height - 4);
 
         g2.setColor(new Color(230, 235, 245));
-        g2.fillRect(innerX + 1, y + 1, innerWidth - 1, 26);
+        g2.fillRect(margin + 1, y + 1, innerWidth - 1, 26);
         g2.setColor(Color.BLACK);
 
         g2.setFont(titleFont);
-        FontMetrics titleFm = g2.getFontMetrics();
+        g2.getFontMetrics();
         String tableLabel = "Tisch " + match.getTableNumber();
-        g2.drawString(tableLabel, innerX + 10, y + 17);
+        g2.drawString(tableLabel, margin + 10, y + 17);
 
         g2.setStroke(new BasicStroke(1f));
-        g2.drawLine(innerX, y + 27, innerX + innerWidth, y + 27);
+        g2.drawLine(margin, y + 27, margin + innerWidth, y + 27);
 
-        int contentY      = y + 28;
+        int contentY = y + 28;
         int labelColWidth = 100;
         int playerColWidth = (innerWidth - labelColWidth) / 2;
-        int col1X = innerX + labelColWidth;
+        int col1X = margin + labelColWidth;
         int col2X = col1X + playerColWidth;
 
         int headerHeight = 22;
         g2.setColor(new Color(210, 220, 240));
-        g2.fillRect(innerX + 1, contentY, innerWidth - 1, headerHeight);
+        g2.fillRect(margin + 1, contentY, innerWidth - 1, headerHeight);
         g2.setColor(Color.BLACK);
 
         g2.setFont(boldFont);
@@ -133,7 +129,7 @@ public class RefereeSheetsController {
         g2.drawString(p1, col1X + 4, contentY + 15);
         g2.drawString(p2, col2X + 4, contentY + 15);
 
-        g2.drawLine(innerX, contentY + headerHeight, innerX + innerWidth, contentY + headerHeight);
+        g2.drawLine(margin, contentY + headerHeight, margin + innerWidth, contentY + headerHeight);
 
         String[] rowLabels = {"Satz 1", "Satz 2", "Satz 3", "Satz 4", "Satz 5", "Gesamtergebnis"};
         int availableHeight = height - 4 - (contentY - y) - headerHeight - 4;
@@ -147,22 +143,22 @@ public class RefereeSheetsController {
 
             if (isTotal) {
                 g2.setColor(new Color(232, 245, 233));
-                g2.fillRect(innerX + 1, rowY, innerWidth - 1, rowHeight);
+                g2.fillRect(margin + 1, rowY, innerWidth - 1, rowHeight);
                 g2.setColor(Color.BLACK);
                 g2.setFont(boldFont);
             } else {
                 g2.setColor(i % 2 == 0 ? Color.WHITE : new Color(248, 248, 252));
-                g2.fillRect(innerX + 1, rowY, innerWidth - 1, rowHeight);
+                g2.fillRect(margin + 1, rowY, innerWidth - 1, rowHeight);
                 g2.setColor(Color.BLACK);
                 g2.setFont(plainFont);
             }
 
             FontMetrics rowFm = g2.getFontMetrics();
             int textY = rowY + (rowHeight + rowFm.getAscent() - rowFm.getDescent()) / 2;
-            g2.drawString(rowLabels[i], innerX + 6, textY);
+            g2.drawString(rowLabels[i], margin + 6, textY);
 
             g2.setStroke(new BasicStroke(0.5f));
-            g2.drawLine(innerX, rowY + rowHeight, innerX + innerWidth, rowY + rowHeight);
+            g2.drawLine(margin, rowY + rowHeight, margin + innerWidth, rowY + rowHeight);
         }
 
         g2.setStroke(new BasicStroke(1f));
@@ -171,7 +167,7 @@ public class RefereeSheetsController {
 
         g2.setStroke(new BasicStroke(1.5f));
         g2.setColor(Color.BLACK);
-        g2.drawRect(innerX, y, innerWidth, height - 4);
+        g2.drawRect(margin, y, innerWidth, height - 4);
     }
 
     private String truncate(String text, FontMetrics fm, int maxWidth) {

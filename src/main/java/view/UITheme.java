@@ -11,9 +11,7 @@ public final class UITheme {
     private UITheme() {}
 
     public static final Color PRIMARY      = new Color(25, 118, 210);
-    public static final Color PRIMARY_DARK = new Color(13, 71, 161);
     public static final Color SUCCESS      = new Color(46, 125, 50);
-    public static final Color DANGER       = new Color(198, 40, 40);
     public static final Color BACKGROUND   = new Color(245, 247, 250);
     public static final Color SURFACE      = Color.WHITE;
     public static final Color ROW_ALT      = new Color(232, 240, 254);
@@ -48,10 +46,6 @@ public final class UITheme {
     }
 
     public static JButton createSecondaryButton(String text) {
-        return createPrimaryButton(text);
-    }
-
-    public static JButton createDangerButton(String text) {
         return createPrimaryButton(text);
     }
 

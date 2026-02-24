@@ -139,12 +139,12 @@ public class MatchTest {
 
     @Test
     public void testEquals_null_notEqual() {
-        assertNotEquals(match, null);
+        assertNotEquals(null, match);
     }
 
     @Test
     public void testEquals_differentType_notEqual() {
-        assertNotEquals(match, "not a match");
+        assertNotEquals("not a match", match);
     }
 
     @Test

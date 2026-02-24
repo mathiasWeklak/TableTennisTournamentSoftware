@@ -103,8 +103,8 @@ public class PairingEngineTest {
         PairingEngine engine = new PairingEngine(List.of(p1, p2), 1, false);
         List<Match> pairings = engine.generateAllPairings(List.of(p1, p2));
         assertEquals(1, pairings.size());
-        assertNotNull(pairings.get(0).getFirstPlayer());
-        assertNotNull(pairings.get(0).getSecondPlayer());
+        assertNotNull(pairings.getFirst().getFirstPlayer());
+        assertNotNull(pairings.getFirst().getSecondPlayer());
     }
 
     @Test
@@ -193,7 +193,7 @@ public class PairingEngineTest {
         List<Match> matchList = new ArrayList<>(List.of(new Match(p1, p2, -1)));
         List<Match> result = engine.selectUniquePlayerMatches(matchList, new ArrayList<>(List.of(5)));
         assertNotNull(result);
-        assertEquals(5, result.get(0).getTableNumber());
+        assertEquals(5, result.getFirst().getTableNumber());
     }
 
     @Test
@@ -235,7 +235,7 @@ public class PairingEngineTest {
         engine.restoreState(List.of(restored), List.of(restored));
         assertEquals(1, engine.getAllMatches().size());
         assertEquals(1, engine.getMatches().size());
-        assertEquals(2, engine.getMatches().get(0).getTableNumber());
+        assertEquals(2, engine.getMatches().getFirst().getTableNumber());
     }
 
     @Test
@@ -348,7 +348,7 @@ public class PairingEngineTest {
         engine.generatePairings(new HashSet<>(), 1);
         Match newMatch = new Match(p1, p2, -1);
         engine.setNewMatches(List.of(newMatch));
-        assertEquals(1, engine.getMatches().get(0).getTableNumber());
+        assertEquals(1, engine.getMatches().getFirst().getTableNumber());
     }
 
     @Test

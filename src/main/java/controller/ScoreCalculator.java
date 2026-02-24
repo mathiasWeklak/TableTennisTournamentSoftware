@@ -5,13 +5,7 @@ import model.Player;
 
 import java.util.*;
 
-public class ScoreCalculator {
-
-    private final List<Match> allMatches;
-
-    public ScoreCalculator(List<Match> allMatches) {
-        this.allMatches = allMatches;
-    }
+public record ScoreCalculator(List<Match> allMatches) {
 
     public void calculate(List<Player> players) {
         players.forEach(player -> {

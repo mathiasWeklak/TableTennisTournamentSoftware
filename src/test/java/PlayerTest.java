@@ -119,12 +119,12 @@ public class PlayerTest {
 
     @Test
     public void testEquals_null_notEqual() {
-        assertNotEquals(player, null);
+        assertNotEquals(null, player);
     }
 
     @Test
     public void testEquals_differentType_notEqual() {
-        assertNotEquals(player, "not a player");
+        assertNotEquals("not a player", player);
     }
 
     @Test

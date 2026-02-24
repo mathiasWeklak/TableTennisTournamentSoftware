@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class TournamentStateTest {
 
-    private Player p1 = new Player("Alice", "A", "ClubA", 1500);
-    private Player p2 = new Player("Bob", "B", "ClubB", 1600);
+    private final Player p1 = new Player("Alice", "A", "ClubA", 1500);
+    private final Player p2 = new Player("Bob", "B", "ClubB", 1600);
 
     @Test
     public void testConstruction_allFieldsStoredCorrectly() {

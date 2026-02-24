@@ -71,12 +71,12 @@ public class PairingEngine {
         if (modus) {
             return generateParingsRoundRobin(pairedPlayers, availableTables, currentRound);
         } else {
-            return generatePairingsSwissSystem(attemptedByePlayers, new ArrayList<>(playerList), availableTables, pairedPlayers);
+            return generatePairingsSwissSystem(attemptedByePlayers, new ArrayList<>(playerList), availableTables);
         }
     }
 
     private String generatePairingsSwissSystem(Set<Player> attemptedByePlayers, List<Player> sortedList,
-                                               List<Integer> availableTables, Set<Player> pairedPlayers) {
+                                               List<Integer> availableTables) {
         sortPlayers(sortedList);
         Player byePlayer = null;
         String byeText = "";
@@ -108,7 +108,7 @@ public class PairingEngine {
                         .append(match.getSecondPlayer().getFullName()).append(" (").append(match.getSecondPlayer().getClub()).append(")")
                         .append(" - Tisch ").append(match.getTableNumber()).append("\n");
             }
-            return pairingsText.toString() + byeText;
+            return pairingsText + byeText;
         }
 
         if (byePlayer != null) {
@@ -137,7 +137,7 @@ public class PairingEngine {
                 if (backtrackSwissPairing(players, paired, result)) {
                     return true;
                 }
-                result.remove(result.size() - 1);
+                result.removeLast();
             }
 
             paired.remove(current);
@@ -156,7 +156,7 @@ public class PairingEngine {
     private boolean canBeFullyMatched(List<Player> players, Set<Player> paired) {
         List<Player> remaining = players.stream()
                 .filter(p -> !paired.contains(p))
-                .collect(Collectors.toList());
+                .toList();
         for (Player player : remaining) {
             boolean hasOpponent = remaining.stream()
                     .anyMatch(p -> !p.equals(player) && neverPlayedBefore(player, p));
