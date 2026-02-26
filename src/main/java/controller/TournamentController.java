@@ -1,6 +1,7 @@
 package controller;
 
 import model.Player;
+import model.TournamentMode;
 import model.TournamentState;
 import view.TournamentView;
 import view.UITheme;
@@ -159,7 +160,8 @@ public class TournamentController {
             return;
         }
 
-        new TournamentRound(playerList, tournamentName, tableCount, view.getModusField().isSelected()).setVisible(true);
+        TournamentMode mode = view.getModusField().isSelected() ? TournamentMode.ROUND_ROBIN : TournamentMode.SWISS;
+        new TournamentRound(playerList, tournamentName, tableCount, mode).setVisible(true);
         view.dispose();
     }
 

@@ -2,6 +2,7 @@ package controller;
 
 import model.Match;
 import model.Player;
+import model.TournamentMode;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,7 +25,7 @@ public class PairingEngine {
 
     private final List<Player> playerList;
     private final int tableNumber;
-    private final boolean modus;
+    private final TournamentMode mode;
     private final List<Match> matches;
     private final List<Match> allMatches;
     private Set<Player> byeList;
@@ -35,12 +36,12 @@ public class PairingEngine {
      *
      * @param playerList  the list of players participating in the tournament
      * @param tableNumber the number of available tables for match assignment
-     * @param modus       {@code true} for Round Robin, {@code false} for Swiss System
+     * @param mode        the tournament mode (SWISS or ROUND_ROBIN)
      */
-    public PairingEngine(List<Player> playerList, int tableNumber, boolean modus) {
+    public PairingEngine(List<Player> playerList, int tableNumber, TournamentMode mode) {
         this.playerList = playerList;
         this.tableNumber = tableNumber;
-        this.modus = modus;
+        this.mode = mode;
         this.matches = new ArrayList<>();
         this.allMatches = new ArrayList<>();
         this.byeList = new HashSet<>();
@@ -48,21 +49,22 @@ public class PairingEngine {
     }
 
     /**
-     * Returns the list of matches scheduled for the current round.
+     * Returns an unmodifiable view of the matches scheduled for the current round.
      *
      * @return the current round's match list
      */
     public List<Match> getMatches() {
-        return matches;
+        return Collections.unmodifiableList(matches);
     }
 
     /**
-     * Returns the cumulative list of all matches across every round played so far.
+     * Returns an unmodifiable view of the cumulative list of all matches across every round
+     * played so far.
      *
      * @return the full match history including the current round
      */
     public List<Match> getAllMatches() {
-        return allMatches;
+        return Collections.unmodifiableList(allMatches);
     }
 
     /**
@@ -110,17 +112,16 @@ public class PairingEngine {
      * Generates pairings for the current round and returns the display text.
      * Returns {@code null} if the tournament is finished (all combinations played).
      *
-     * @param attemptedByePlayers players already tried as bye recipients this round
-     * @param currentRound        the current round number (used for Round Robin termination check)
+     * @param currentRound the current round number (used for Round Robin termination check)
      * @return pairing text to display, or {@code null} if no more rounds are possible
      */
-    public String generatePairings(Set<Player> attemptedByePlayers, int currentRound) {
+    public String generatePairings(int currentRound) {
         List<Integer> availableTables = IntStream.rangeClosed(1, tableNumber).boxed().collect(Collectors.toList());
 
-        if (modus) {
+        if (mode == TournamentMode.ROUND_ROBIN) {
             return generatePairingsRoundRobin(availableTables, currentRound);
         } else {
-            return generatePairingsSwissSystem(attemptedByePlayers, new ArrayList<>(playerList), availableTables);
+            return generatePairingsSwissSystem(new ArrayList<>(playerList), availableTables);
         }
     }
 
@@ -129,18 +130,16 @@ public class PairingEngine {
      * Assigns a bye if the player count is odd, then uses backtracking to find valid pairings.
      * Falls back to a force-pairing strategy if backtracking yields no valid result.
      *
-     * @param attemptedByePlayers players already tried as the bye recipient this round
-     * @param sortedList          the player list to pair, sorted by ranking
-     * @param availableTables     the pool of table numbers to assign
+     * @param sortedList      the player list to pair, sorted by ranking
+     * @param availableTables the pool of table numbers to assign
      * @return formatted pairing text, or {@code null} if no valid pairings exist
      */
-    private String generatePairingsSwissSystem(Set<Player> attemptedByePlayers, List<Player> sortedList,
-                                               List<Integer> availableTables) {
-        sortPlayersByRanking(sortedList, modus);
+    private String generatePairingsSwissSystem(List<Player> sortedList, List<Integer> availableTables) {
+        sortPlayersByRanking(sortedList, mode);
         Player byePlayer = null;
 
         if (playerList.size() % 2 != 0) {
-            byePlayer = assignByePlayer(sortedList, attemptedByePlayers);
+            byePlayer = assignByePlayer(sortedList);
             if (byePlayer == null) {
                 return forcePairing(availableTables);
             }
@@ -151,9 +150,8 @@ public class PairingEngine {
                 .map(m -> createCanonicalPairing(m.getFirstPlayer(), m.getSecondPlayer()))
                 .collect(Collectors.toSet());
 
-        List<Player> orderedPlayers = sortedList.stream()
-                .sorted(Comparator.comparingInt(Player::getPoints).reversed())
-                .toList();
+        List<Player> orderedPlayers = new ArrayList<>(sortedList);
+        Collections.reverse(orderedPlayers);
 
         List<Match> swissPairings = new ArrayList<>();
         if (backtrackSwissPairing(orderedPlayers, new HashSet<>(), swissPairings, playedPairs)) {
@@ -214,8 +212,9 @@ public class PairingEngine {
 
     /**
      * Returns a list of valid opponents for {@code player} in the Swiss System, ordered by
-     * closeness in tournament points. A player qualifies as a valid opponent if they have not
-     * yet been paired this round and have never played {@code player} before.
+     * closeness in tournament points, then by TTR descending for deterministic tie-breaking.
+     * A player qualifies as a valid opponent if they have not yet been paired this round
+     * and have never played {@code player} before.
      *
      * @param player  the player to find opponents for
      * @param players the full player list for this round
@@ -227,7 +226,8 @@ public class PairingEngine {
         return players.stream()
                 .filter(p -> !paired.contains(p) && !p.equals(player)
                         && !playedPairs.contains(createCanonicalPairing(player, p)))
-                .sorted(Comparator.comparingInt((Player p) -> Math.abs(p.getPoints() - player.getPoints())))
+                .sorted(Comparator.comparingInt((Player p) -> Math.abs(p.getPoints() - player.getPoints()))
+                        .thenComparing(Comparator.comparingInt(Player::getTtr).reversed()))
                 .toList();
     }
 
@@ -243,13 +243,32 @@ public class PairingEngine {
     private boolean canBeFullyMatched(List<Player> players, Set<Player> paired, Set<String> playedPairs) {
         List<Player> remaining = players.stream()
                 .filter(p -> !paired.contains(p))
-                .toList();
+                .collect(Collectors.toCollection(ArrayList::new));
         for (Player player : remaining) {
             boolean hasOpponent = remaining.stream()
                     .anyMatch(p -> !p.equals(player) && !playedPairs.contains(createCanonicalPairing(player, p)));
             if (!hasOpponent) return false;
         }
-        return true;
+        return hasCompleteMatching(remaining, playedPairs);
+    }
+
+    private boolean hasCompleteMatching(List<Player> remaining, Set<String> playedPairs) {
+        if (remaining.isEmpty()) return true;
+        Player first = remaining.removeFirst();
+        for (int i = 0; i < remaining.size(); i++) {
+            Player candidate = remaining.get(i);
+            if (!playedPairs.contains(createCanonicalPairing(first, candidate))) {
+                remaining.remove(i);
+                if (hasCompleteMatching(remaining, playedPairs)) {
+                    remaining.add(i, candidate);
+                    remaining.addFirst(first);
+                    return true;
+                }
+                remaining.add(i, candidate);
+            }
+        }
+        remaining.addFirst(first);
+        return false;
     }
 
     /**
@@ -347,23 +366,23 @@ public class PairingEngine {
         matches.clear();
         matches.addAll(forcedMatches);
         allMatches.addAll(forcedMatches);
+        byeList = new HashSet<>(getPlayersWithBye(allMatches));
 
         return formatMatchesAsText(matches);
     }
 
     /**
      * Selects and assigns a bye (Freilos) player for this round.
-     * Picks the lowest-ranked player who has not yet had a bye and has not already been attempted
-     * as a bye candidate in the current round. The selected player is removed from
-     * {@code sortedList} and a bye match is added to both the current-round and full match lists.
+     * Picks the lowest-ranked player who has not yet had a bye.
+     * The selected player is removed from {@code sortedList} and a bye match is added to both
+     * the current-round and full match lists.
      *
-     * @param sortedList          the ranked player list; the bye player is removed in-place
-     * @param attemptedByePlayers players already tried as the bye recipient this round
+     * @param sortedList the ranked player list; the bye player is removed in-place
      * @return the chosen bye player, or {@code null} if none is eligible
      */
-    private Player assignByePlayer(List<Player> sortedList, Set<Player> attemptedByePlayers) {
+    private Player assignByePlayer(List<Player> sortedList) {
         Player byePlayer = sortedList.stream()
-                .filter(p -> !byeList.contains(p) && !attemptedByePlayers.contains(p))
+                .filter(p -> !byeList.contains(p))
                 .findFirst()
                 .orElse(null);
         if (byePlayer == null) {
@@ -397,10 +416,10 @@ public class PairingEngine {
      * Sorts players by their ranking criteria. Used for both standings display and pairing order.
      *
      * @param players the list to sort (in place)
-     * @param modus   {@code true} for Round Robin, {@code false} for Swiss System
+     * @param mode    the tournament mode
      */
-    static void sortPlayersByRanking(List<Player> players, boolean modus) {
-        if (!modus) {
+    static void sortPlayersByRanking(List<Player> players, TournamentMode mode) {
+        if (mode == TournamentMode.SWISS) {
             players.sort(Comparator.comparing(Player::getPoints)
                     .thenComparing(Player::getBuchholz)
                     .thenComparing(Player::getFeinBuchholz)
@@ -626,9 +645,9 @@ public class PairingEngine {
      * Uses null-character delimiters to prevent name-based ambiguity.
      */
     private String createCanonicalPairing(Player player1, Player player2) {
-        String id1 = player1.getFullName() + "\0" + player1.getClub();
+        String id1 = player1.getFullName() + "\0" + player1.getClub() + "\0" + player1.getTtr();
         String id2 = player2 != null
-                ? player2.getFullName() + "\0" + player2.getClub()
+                ? player2.getFullName() + "\0" + player2.getClub() + "\0" + player2.getTtr()
                 : "\0BYE\0";
         return id1.compareTo(id2) <= 0 ? id1 + "\1" + id2 : id2 + "\1" + id1;
     }

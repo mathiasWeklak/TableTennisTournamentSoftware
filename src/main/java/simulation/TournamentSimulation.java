@@ -2,11 +2,11 @@ package simulation;
 
 import controller.PairingEngine;
 import controller.ScoreCalculator;
-import model.Player;
 import model.Match;
+import model.Player;
+import model.TournamentMode;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 
@@ -70,11 +70,11 @@ public class TournamentSimulation {
      * @return the total number of rounds played
      */
     private static int runSimulation(List<Player> players) {
-        PairingEngine engine = new PairingEngine(players, TABLE_COUNT, false);
+        PairingEngine engine = new PairingEngine(players, TABLE_COUNT, TournamentMode.SWISS);
         ScoreCalculator scoreCalculator = new ScoreCalculator(engine.getAllMatches());
 
         int round = 0;
-        String pairings = engine.generatePairings(new HashSet<>(), 1);
+        String pairings = engine.generatePairings(1);
 
         while (pairings != null) {
             round++;
@@ -87,7 +87,7 @@ public class TournamentSimulation {
             printCurrentTable(players);
 
             engine.clearCurrentRound();
-            pairings = engine.generatePairings(new HashSet<>(), round + 1);
+            pairings = engine.generatePairings(round + 1);
         }
 
         return round;
@@ -124,7 +124,11 @@ public class TournamentSimulation {
 
                 int totalSets = setsFirstPlayer + setsSecondPlayer;
                 for (int i = 0; i < totalSets; i++) {
-                    String[] setResult = new String[]{String.valueOf(rand.nextInt(11) + 1), String.valueOf(rand.nextInt(11) + 1)};
+                    boolean firstWinsSet = i < setsFirstPlayer;
+                    int loser = rand.nextInt(10);
+                    String[] setResult = firstWinsSet
+                            ? new String[]{"11", String.valueOf(loser)}
+                            : new String[]{String.valueOf(loser), "11"};
                     match.setResults(i, setResult);
                 }
                 for (int i = totalSets; i < 5; i++) {

@@ -89,9 +89,15 @@ public class PlayerTest {
     }
 
     @Test
-    public void testEquals_sameNameAndClub_areEqual() {
-        Player other = new Player("John", "Doe", "ClubA", 9999);
+    public void testEquals_sameNameAndClubAndTtr_areEqual() {
+        Player other = new Player("John", "Doe", "ClubA", 1500);
         assertEquals(player, other);
+    }
+
+    @Test
+    public void testEquals_sameNameAndClub_differentTtr_notEqual() {
+        Player other = new Player("John", "Doe", "ClubA", 9999);
+        assertNotEquals(player, other);
     }
 
     @Test
@@ -129,7 +135,7 @@ public class PlayerTest {
 
     @Test
     public void testHashCode_equalPlayersHaveSameHashCode() {
-        Player other = new Player("John", "Doe", "ClubA", 9999);
+        Player other = new Player("John", "Doe", "ClubA", 1500);
         assertEquals(player.hashCode(), other.hashCode());
     }
 

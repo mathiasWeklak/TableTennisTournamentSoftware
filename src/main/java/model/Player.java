@@ -271,7 +271,8 @@ public class Player implements Serializable {
         if (!(o instanceof Player other)) return false;
         return Objects.equals(firstName, other.firstName)
                 && Objects.equals(lastName, other.lastName)
-                && Objects.equals(club, other.club);
+                && Objects.equals(club, other.club)
+                && ttr == other.ttr;
     }
 
     /**
@@ -281,6 +282,11 @@ public class Player implements Serializable {
      */
     @Override
     public int hashCode() {
-        return Objects.hash(firstName, lastName, club);
+        return Objects.hash(firstName, lastName, club, ttr);
+    }
+
+    @Override
+    public String toString() {
+        return getFullName() + " (" + club + ")";
     }
 }

@@ -104,8 +104,8 @@ public class ScoreCalculator {
             }
         }
 
-        players.forEach(p -> p.setBuchholz(calculateBuchholz(p)));
-        players.forEach(p -> p.setFeinBuchholz(calculateFeinBuchholz(p)));
+        players.forEach(p -> p.setBuchholz(calculateBuchholz(p, matchesToProcess)));
+        players.forEach(p -> p.setFeinBuchholz(calculateFeinBuchholz(p, matchesToProcess)));
     }
 
     /**
@@ -132,30 +132,32 @@ public class ScoreCalculator {
     }
 
     /**
-     * Calculates the Buchholz score for the given player.
+     * Calculates the Buchholz score for the given player from the deduplicated match list.
      * The Buchholz score is the sum of points scored by all opponents the player has faced
      * (excluding bye matches).
      *
-     * @param player the player whose Buchholz score is to be calculated
+     * @param player  the player whose Buchholz score is to be calculated
+     * @param matches the deduplicated list of matches to evaluate
      * @return the Buchholz score
      */
-    private int calculateBuchholz(Player player) {
-        return allMatches.stream()
+    private int calculateBuchholz(Player player, List<Match> matches) {
+        return matches.stream()
                 .filter(match -> isPlayerInMatch(match, player) && match.getSecondPlayer() != null)
                 .mapToInt(match -> getOpponentPoints(match, player))
                 .sum();
     }
 
     /**
-     * Calculates the Fein-Buchholz score for the given player.
+     * Calculates the Fein-Buchholz score for the given player from the deduplicated match list.
      * The Fein-Buchholz score is the sum of Buchholz scores of all opponents the player has faced
      * (excluding bye matches), serving as a secondary tiebreaker after Buchholz.
      *
-     * @param player the player whose Fein-Buchholz score is to be calculated
+     * @param player  the player whose Fein-Buchholz score is to be calculated
+     * @param matches the deduplicated list of matches to evaluate
      * @return the Fein-Buchholz score
      */
-    private int calculateFeinBuchholz(Player player) {
-        return allMatches.stream()
+    private int calculateFeinBuchholz(Player player, List<Match> matches) {
+        return matches.stream()
                 .filter(match -> isPlayerInMatch(match, player) && match.getSecondPlayer() != null)
                 .mapToInt(match -> getOpponentBuchholz(match, player))
                 .sum();

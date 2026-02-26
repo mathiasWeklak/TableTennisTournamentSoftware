@@ -8,8 +8,10 @@ import javax.swing.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -42,7 +44,7 @@ public class MatchManagerController {
         possibleMatchesModel = new DefaultListModel<>();
         selectedMatchesModel = new DefaultListModel<>();
 
-        for (Match match : matches) {
+        for (Match match : allPossibleMatches) {
             possibleMatchesModel.addElement(match);
         }
 
@@ -128,18 +130,18 @@ public class MatchManagerController {
      * @param possibleMatchesModel The model containing the possible matches.
      * @param allPossibleMatches List of all possible matches.
      */
-    static void refreshAvailableMatches(DefaultListModel<Match> selectedMatchesModel, DefaultListModel<Match> possibleMatchesModel, List<Match> allPossibleMatches) {
+    private static void refreshAvailableMatches(DefaultListModel<Match> selectedMatchesModel, DefaultListModel<Match> possibleMatchesModel, List<Match> allPossibleMatches) {
         var selected = IntStream.range(0, selectedMatchesModel.getSize())
                 .mapToObj(selectedMatchesModel::getElementAt)
                 .toList();
 
         boolean freilosSelected = selected.stream().anyMatch(m -> m.getSecondPlayer() == null);
 
-        List<Player> selectedPlayers = selected.stream()
+        Set<Player> selectedPlayers = selected.stream()
                 .flatMap(m -> m.getSecondPlayer() != null
                         ? Stream.of(m.getFirstPlayer(), m.getSecondPlayer())
                         : Stream.of(m.getFirstPlayer()))
-                .toList();
+                .collect(Collectors.toCollection(HashSet::new));
 
         possibleMatchesModel.clear();
         allPossibleMatches.stream()

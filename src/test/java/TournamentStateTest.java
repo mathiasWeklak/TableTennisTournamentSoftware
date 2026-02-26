@@ -1,5 +1,6 @@
 import model.Match;
 import model.Player;
+import model.TournamentMode;
 import model.TournamentState;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,7 @@ public class TournamentStateTest {
         List<Match> currentMatches = List.of(new Match(p1, p2, 1));
 
         TournamentState state = new TournamentState(
-                players, allMatches, currentMatches, 3, false, "TestTurnier", 4, true
+                players, allMatches, currentMatches, 3, false, "TestTurnier", 4, TournamentMode.ROUND_ROBIN
         );
 
         assertSame(players, state.playerList());
@@ -29,29 +30,29 @@ public class TournamentStateTest {
         assertFalse(state.finished());
         assertEquals("TestTurnier", state.tournamentName());
         assertEquals(4, state.tableCount());
-        assertTrue(state.modus());
+        assertEquals(TournamentMode.ROUND_ROBIN, state.mode());
     }
 
     @Test
     public void testFinished_trueStoredCorrectly() {
         TournamentState state = new TournamentState(
-                List.of(), List.of(), List.of(), 1, true, "T", 1, false
+                List.of(), List.of(), List.of(), 1, true, "T", 1, TournamentMode.SWISS
         );
         assertTrue(state.finished());
     }
 
     @Test
-    public void testModus_falseStoredCorrectly() {
+    public void testModus_swissStoredCorrectly() {
         TournamentState state = new TournamentState(
-                List.of(), List.of(), List.of(), 1, false, "T", 1, false
+                List.of(), List.of(), List.of(), 1, false, "T", 1, TournamentMode.SWISS
         );
-        assertFalse(state.modus());
+        assertEquals(TournamentMode.SWISS, state.mode());
     }
 
     @Test
     public void testCurrentRound_storedCorrectly() {
         TournamentState state = new TournamentState(
-                List.of(), List.of(), List.of(), 7, false, "T", 2, false
+                List.of(), List.of(), List.of(), 7, false, "T", 2, TournamentMode.SWISS
         );
         assertEquals(7, state.currentRound());
     }
@@ -59,7 +60,7 @@ public class TournamentStateTest {
     @Test
     public void testTableCount_storedCorrectly() {
         TournamentState state = new TournamentState(
-                List.of(), List.of(), List.of(), 1, false, "T", 10, false
+                List.of(), List.of(), List.of(), 1, false, "T", 10, TournamentMode.SWISS
         );
         assertEquals(10, state.tableCount());
     }
@@ -67,7 +68,7 @@ public class TournamentStateTest {
     @Test
     public void testTournamentName_storedCorrectly() {
         TournamentState state = new TournamentState(
-                List.of(), List.of(), List.of(), 1, false, "Mein Turnier", 1, false
+                List.of(), List.of(), List.of(), 1, false, "Mein Turnier", 1, TournamentMode.SWISS
         );
         assertEquals("Mein Turnier", state.tournamentName());
     }
@@ -75,7 +76,7 @@ public class TournamentStateTest {
     @Test
     public void testEmptyLists_storedCorrectly() {
         TournamentState state = new TournamentState(
-                List.of(), List.of(), List.of(), 1, false, "T", 1, false
+                List.of(), List.of(), List.of(), 1, false, "T", 1, TournamentMode.SWISS
         );
         assertTrue(state.playerList().isEmpty());
         assertTrue(state.allMatches().isEmpty());
@@ -87,16 +88,16 @@ public class TournamentStateTest {
         List<Player> players = List.of(p1);
         List<Match> matches = List.of();
 
-        TournamentState state1 = new TournamentState(players, matches, matches, 2, false, "T", 3, true);
-        TournamentState state2 = new TournamentState(players, matches, matches, 2, false, "T", 3, true);
+        TournamentState state1 = new TournamentState(players, matches, matches, 2, false, "T", 3, TournamentMode.ROUND_ROBIN);
+        TournamentState state2 = new TournamentState(players, matches, matches, 2, false, "T", 3, TournamentMode.ROUND_ROBIN);
 
         assertEquals(state1, state2);
     }
 
     @Test
     public void testEquality_differentRound_notEqual() {
-        TournamentState state1 = new TournamentState(List.of(), List.of(), List.of(), 1, false, "T", 1, false);
-        TournamentState state2 = new TournamentState(List.of(), List.of(), List.of(), 2, false, "T", 1, false);
+        TournamentState state1 = new TournamentState(List.of(), List.of(), List.of(), 1, false, "T", 1, TournamentMode.SWISS);
+        TournamentState state2 = new TournamentState(List.of(), List.of(), List.of(), 2, false, "T", 1, TournamentMode.SWISS);
         assertNotEquals(state1, state2);
     }
 }

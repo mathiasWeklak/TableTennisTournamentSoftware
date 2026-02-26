@@ -4,6 +4,7 @@ import model.Match;
 import model.Player;
 import model.TournamentState;
 
+import model.TournamentMode;
 import view.UITheme;
 
 import javax.swing.*;
@@ -25,7 +26,7 @@ public class TournamentRound extends JFrame {
 
     private final List<Player> playerList;
     private final int tableNumber;
-    private final boolean modus;
+    private final TournamentMode mode;
     private final String tournamentName;
 
     private final PairingEngine pairingEngine;
@@ -42,22 +43,22 @@ public class TournamentRound extends JFrame {
      * @param playerList     the list of players participating in the tournament
      * @param tournamentName the name of the tournament
      * @param tableNumber    the number of available tables
-     * @param modus          {@code true} for Round Robin, {@code false} for Swiss System
+     * @param mode           the tournament mode (SWISS or ROUND_ROBIN)
      */
-    public TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, boolean modus) {
-        this(playerList, tournamentName, tableNumber, modus, false);
+    public TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode) {
+        this(playerList, tournamentName, tableNumber, mode, false);
     }
 
-    private TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, boolean modus,
+    private TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode,
                              boolean skipInitialPairing) {
         this.playerList = new ArrayList<>(playerList);
         this.tableNumber = tableNumber;
-        this.modus = modus;
+        this.mode = mode;
         this.tournamentName = tournamentName;
         this.currentRound = 1;
         this.pairingsTextArea = new JTextArea(11, 20);
 
-        this.pairingEngine = new PairingEngine(this.playerList, tableNumber, modus);
+        this.pairingEngine = new PairingEngine(this.playerList, tableNumber, mode);
         this.scoreCalculator = new ScoreCalculator(pairingEngine.getAllMatches());
 
         setTitle("Turnierrunde");
@@ -149,7 +150,7 @@ public class TournamentRound extends JFrame {
         add(bottomPanel, BorderLayout.SOUTH);
 
         if (!skipInitialPairing) {
-            String pairingsText = pairingEngine.generatePairings(new HashSet<>(), currentRound);
+            String pairingsText = pairingEngine.generatePairings(currentRound);
             if (pairingsText != null) {
                 pairingsTextArea.setText(pairingsText);
             } else {
@@ -182,7 +183,7 @@ public class TournamentRound extends JFrame {
         });
         bottomPanel.add(resultEntryButton);
 
-        if (!modus) {
+        if (mode == TournamentMode.SWISS) {
             bottomPanel.add(getManipulateButton());
         }
         return bottomPanel;
@@ -204,7 +205,7 @@ public class TournamentRound extends JFrame {
             if (!resultsEntered) {
                 List<Match> allPossibleOpenMatches = pairingEngine.calculateAllPossibleOpenMatches();
                 allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
-                Set<Match> uniqueMatches = new HashSet<>(allPossibleOpenMatches);
+                Set<Match> uniqueMatches = new LinkedHashSet<>(allPossibleOpenMatches);
                 new MatchManagerController(uniqueMatches, playerList.size(), this).getView().setVisible(true);
             } else {
                 JOptionPane.showMessageDialog(this,
@@ -253,7 +254,7 @@ public class TournamentRound extends JFrame {
         tableModel.addColumn("Name");
         tableModel.addColumn("Punkte");
         tableModel.addColumn("Spiele");
-        if (!modus) {
+        if (mode == TournamentMode.SWISS) {
             tableModel.addColumn("BHZ");
             tableModel.addColumn("fBHZ");
         }
@@ -276,7 +277,7 @@ public class TournamentRound extends JFrame {
      */
     private Object[] getRowData(Player player, int i) {
         String winsLosses = player.getWins() + ":" + player.getLosses();
-        if (!modus) {
+        if (mode == TournamentMode.SWISS) {
             return new Object[]{
                     i + 1,
                     player.getFullName() + " (" + player.getClub() + ")",
@@ -305,7 +306,7 @@ public class TournamentRound extends JFrame {
      * @param players the list of players to sort
      */
     private void sortPlayers(List<Player> players) {
-        PairingEngine.sortPlayersByRanking(players, modus);
+        PairingEngine.sortPlayersByRanking(players, mode);
     }
 
     /**
@@ -335,20 +336,24 @@ public class TournamentRound extends JFrame {
             return;
         }
 
-        currentRound++;
-        currentRoundLabel.setText("Runde " + currentRound);
         pairingEngine.clearCurrentRound();
-        pairingsTextArea.setText("");
+        String pairingsText = pairingEngine.generatePairings(currentRound + 1);
 
-        String pairingsText = pairingEngine.generatePairings(new HashSet<>(), currentRound);
         if (pairingsText != null) {
+            currentRound++;
+            currentRoundLabel.setText("Runde " + currentRound);
             pairingsTextArea.setText(pairingsText);
         } else {
+            pairingsTextArea.setText("");
+        }
+
+        saveTournamentState();
+
+        if (pairingsText == null) {
             JOptionPane.showMessageDialog(this, "Es wurden bereits alle möglichen Kombinationen gespielt.",
                     "Keine Paarungen mehr möglich", JOptionPane.INFORMATION_MESSAGE);
         }
 
-        saveTournamentState();
         updateResultsTable();
 
     }
@@ -402,12 +407,12 @@ public class TournamentRound extends JFrame {
                 pairingEngine.isFinished(),
                 tournamentName,
                 tableNumber,
-                modus
+                mode
         );
 
         try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))) {
             out.writeObject(state);
-        } catch (IOException e) {
+        } catch (IOException _) {
             JOptionPane.showMessageDialog(this, "Fehler beim Speichern.", "Fehler", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -422,7 +427,7 @@ public class TournamentRound extends JFrame {
                 new ArrayList<>(state.playerList()),
                 state.tournamentName(),
                 state.tableCount(),
-                state.modus(),
+                state.mode(),
                 true
         );
         round.currentRound = state.currentRound();

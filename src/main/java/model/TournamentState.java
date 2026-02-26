@@ -22,7 +22,7 @@ import java.util.List;
  * @param finished       whether the tournament is considered completed
  * @param tournamentName the name of the tournament
  * @param tableCount     the number of available tables for match scheduling
- * @param modus          the tournament mode (true = round-robin, false = Swiss system)
+ * @param mode           the tournament mode (SWISS or ROUND_ROBIN)
  */
 public record TournamentState(
         List<Player> playerList,
@@ -32,8 +32,8 @@ public record TournamentState(
         boolean finished,
         String tournamentName,
         int tableCount,
-        boolean modus
+        TournamentMode mode
 ) implements Serializable {
     @Serial
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
 }

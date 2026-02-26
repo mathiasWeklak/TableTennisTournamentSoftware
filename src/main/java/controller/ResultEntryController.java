@@ -2,7 +2,9 @@ package controller;
 
 import model.Match;
 import view.ResultEntryView;
-import javax.swing.*;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.PlainDocument;
@@ -18,23 +20,17 @@ public class ResultEntryController {
     public record MatchPanelData(JTextField[][] setResultsFields, JTextField wonSetsField,
                                  JTextField lostSetsField, Match match) {}
 
-    private ResultEntryView view;
+    private final ResultEntryView view;
 
     /**
-     * Constructs a new ResultEntryController.
+     * Constructs a new ResultEntryController and immediately initializes the UI.
+     * Must be called on the Event Dispatch Thread.
      *
      * @param matches         List of matches to display and manage results for
      * @param tournamentRound The tournament round associated with the matches
      */
     public ResultEntryController(List<Match> matches, TournamentRound tournamentRound) {
-        SwingUtilities.invokeLater(() -> initializeUI(matches, tournamentRound));
-    }
-
-    /**
-     * Initializes the user interface.
-     */
-    private void initializeUI(List<Match> matches, TournamentRound tournamentRound) {
-        view = new ResultEntryView(this, matches, tournamentRound);
+        this.view = new ResultEntryView(this, matches, tournamentRound);
     }
 
     /**

@@ -117,9 +117,9 @@ public class Match implements Serializable {
 
     @Override
     public int hashCode() {
-        int p1 = Objects.hashCode(firstPlayer);
-        int p2 = Objects.hashCode(secondPlayer);
-        return p1 < p2 ? Objects.hash(p1, p2) : Objects.hash(p2, p1);
+        int h1 = Objects.hashCode(firstPlayer);
+        int h2 = Objects.hashCode(secondPlayer);
+        return h1 <= h2 ? Objects.hash(firstPlayer, secondPlayer) : Objects.hash(secondPlayer, firstPlayer);
     }
 
     /**
