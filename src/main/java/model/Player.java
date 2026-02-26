@@ -33,6 +33,10 @@ public class Player implements Serializable {
      * @param ttr       the TTR (Table Tennis Rating) value of the player
      */
     public Player(String firstName, String lastName, String club, int ttr) {
+        if (firstName == null || firstName.isBlank()) throw new IllegalArgumentException("firstName must not be blank");
+        if (lastName == null || lastName.isBlank()) throw new IllegalArgumentException("lastName must not be blank");
+        if (club == null || club.isBlank()) throw new IllegalArgumentException("club must not be blank");
+        if (ttr < 0) throw new IllegalArgumentException("ttr must not be negative");
         this.firstName = firstName;
         this.lastName = lastName;
         this.club = club;
@@ -183,38 +187,84 @@ public class Player implements Serializable {
         this.losses = losses;
     }
 
+    /**
+     * Retrieves the number of sets won by the player.
+     *
+     * @return the number of sets won
+     */
     public int getSetsWon() {
         return setsWon;
     }
 
+    /**
+     * Sets the number of sets won by the player.
+     *
+     * @param setsWon the number of sets won to set
+     */
     public void setSetsWon(int setsWon) {
         this.setsWon = setsWon;
     }
 
+    /**
+     * Retrieves the number of sets lost by the player.
+     *
+     * @return the number of sets lost
+     */
     public int getSetsLost() {
         return setsLost;
     }
 
+    /**
+     * Sets the number of sets lost by the player.
+     *
+     * @param setsLost the number of sets lost to set
+     */
     public void setSetsLost(int setsLost) {
         this.setsLost = setsLost;
     }
 
+    /**
+     * Retrieves the number of balls (points) won by the player across all sets.
+     *
+     * @return the number of balls won
+     */
     public int getBallsWon() {
         return ballsWon;
     }
 
+    /**
+     * Sets the number of balls (points) won by the player across all sets.
+     *
+     * @param ballsWon the number of balls won to set
+     */
     public void setBallsWon(int ballsWon) {
         this.ballsWon = ballsWon;
     }
 
+    /**
+     * Retrieves the number of balls (points) lost by the player across all sets.
+     *
+     * @return the number of balls lost
+     */
     public int getBallsLost() {
         return ballsLost;
     }
 
+    /**
+     * Sets the number of balls (points) lost by the player across all sets.
+     *
+     * @param ballsLost the number of balls lost to set
+     */
     public void setBallsLost(int ballsLost) {
         this.ballsLost = ballsLost;
     }
 
+    /**
+     * Two players are considered equal if they share the same first name, last name, and club.
+     *
+     * @param o the object to compare with
+     * @return {@code true} if the players are equal, {@code false} otherwise
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -224,6 +274,11 @@ public class Player implements Serializable {
                 && Objects.equals(club, other.club);
     }
 
+    /**
+     * Returns a hash code based on the player's first name, last name, and club.
+     *
+     * @return the hash code
+     */
     @Override
     public int hashCode() {
         return Objects.hash(firstName, lastName, club);

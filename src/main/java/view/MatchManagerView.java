@@ -6,6 +6,15 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
+/**
+ * View for manually overriding the current round's pairings in Swiss System mode.
+ *
+ * <p>Displays all unplayed possible matches in one list and allows the user to move
+ * matches to a "selected" list. When the required number of matches (covering all players)
+ * is selected, the user can commit the new pairings to the tournament round.</p>
+ *
+ * <p>All interaction logic is handled by {@link controller.MatchManagerController}.</p>
+ */
 public class MatchManagerView extends JFrame {
     private final JList<Match> possibleMatchesList;
     private final JList<Match> selectedMatchesList;
@@ -13,6 +22,13 @@ public class MatchManagerView extends JFrame {
     private final JButton upButton;
     private final JButton commitButton;
 
+    /**
+     * Constructs the match manager window.
+     *
+     * @param possibleMatchesModel the list model of all possible (unplayed) matches
+     * @param selectedMatchesModel the list model for the currently selected matches
+     * @param playerCount          the total number of players (used to compute required match count)
+     */
     public MatchManagerView(DefaultListModel<Match> possibleMatchesModel,
                             DefaultListModel<Match> selectedMatchesModel, int playerCount) {
 
@@ -95,27 +111,61 @@ public class MatchManagerView extends JFrame {
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
+    /**
+     * Returns the list of all possible (unplayed) matches.
+     *
+     * @return the possible matches list
+     */
     public JList<Match> getPossibleMatchesList() {
         return possibleMatchesList;
     }
 
+    /**
+     * Returns the list of matches selected for the current round.
+     *
+     * @return the selected matches list
+     */
     public JList<Match> getSelectedMatchesList() {
         return selectedMatchesList;
     }
 
+    /**
+     * Returns the "select match" (down arrow) button.
+     *
+     * @return the select/down button
+     */
     public JButton getDownButton() {
         return downButton;
     }
 
+    /**
+     * Returns the "remove match" (up arrow) button.
+     *
+     * @return the remove/up button
+     */
     public JButton getUpButton() {
         return upButton;
     }
 
+    /**
+     * Returns the "commit selected matches" button.
+     *
+     * @return the commit button
+     */
     public JButton getCommitButton() {
         return commitButton;
     }
 
+    /**
+     * Custom list cell renderer for {@link Match} objects.
+     * Displays each match as "Player1  vs  Player2" or "Player1  —  Freilos" for bye matches,
+     * with alternating row background colors.
+     */
     private static class MatchRenderer extends DefaultListCellRenderer {
+        /**
+         * {@inheritDoc}
+         * Formats the match label and applies alternating row background colors.
+         */
         @Override
         public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);

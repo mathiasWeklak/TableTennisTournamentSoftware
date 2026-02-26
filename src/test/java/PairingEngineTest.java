@@ -395,4 +395,136 @@ public class PairingEngineTest {
         List<Match> open = engine.calculateAllPossibleOpenMatches();
         assertFalse(open.isEmpty());
     }
+
+    @Test
+    public void testRoundRobin_evenPlayers_allPairsGenerated() {
+        PairingEngine engine = new PairingEngine(List.of(p1, p2, p3, p4), 2, true);
+        Set<String> seenPairs = new HashSet<>();
+        int round = 1;
+        String text = engine.generatePairings(new HashSet<>(), round);
+        while (text != null) {
+            for (Match m : engine.getMatches()) {
+                if (m.getSecondPlayer() != null) {
+                    String key = m.getFirstPlayer().getFullName() + "||" + m.getSecondPlayer().getFullName();
+                    String keyRev = m.getSecondPlayer().getFullName() + "||" + m.getFirstPlayer().getFullName();
+                    assertFalse(seenPairs.contains(key) || seenPairs.contains(keyRev), "Duplicate pairing in round " + round);
+                    seenPairs.add(key);
+                }
+            }
+            engine.clearCurrentRound();
+            round++;
+            text = engine.generatePairings(new HashSet<>(), round);
+        }
+        assertEquals(3, round - 1);
+        assertEquals(6, seenPairs.size());
+    }
+
+    @Test
+    public void testRoundRobin_evenPlayers_eachPlayerPlaysEveryRound() {
+        PairingEngine engine = new PairingEngine(List.of(p1, p2, p3, p4), 2, true);
+        int round = 1;
+        String text = engine.generatePairings(new HashSet<>(), round);
+        while (text != null) {
+            Set<Player> playersThisRound = new HashSet<>();
+            for (Match m : engine.getMatches()) {
+                playersThisRound.add(m.getFirstPlayer());
+                if (m.getSecondPlayer() != null) playersThisRound.add(m.getSecondPlayer());
+            }
+            assertEquals(4, playersThisRound.size(), "Not all players played in round " + round);
+            engine.clearCurrentRound();
+            round++;
+            text = engine.generatePairings(new HashSet<>(), round);
+        }
+    }
+
+    @Test
+    public void testRoundRobin_oddPlayers_correctNumberOfRounds() {
+        Player p5 = new Player("Eve", "E", "ClubE", 1200);
+        PairingEngine engine = new PairingEngine(List.of(p1, p2, p3, p4, p5), 2, true);
+        int round = 1;
+        String text = engine.generatePairings(new HashSet<>(), round);
+        while (text != null) {
+            engine.clearCurrentRound();
+            round++;
+            text = engine.generatePairings(new HashSet<>(), round);
+        }
+        assertEquals(5, round - 1);
+    }
+
+    @Test
+    public void testRoundRobin_oddPlayers_eachPlayerGetsExactlyOneBye() {
+        Player p5 = new Player("Eve", "E", "ClubE", 1200);
+        List<Player> players = List.of(p1, p2, p3, p4, p5);
+        PairingEngine engine = new PairingEngine(players, 2, true);
+        Map<Player, Integer> byeCount = new HashMap<>();
+        for (Player p : players) byeCount.put(p, 0);
+
+        int round = 1;
+        String text = engine.generatePairings(new HashSet<>(), round);
+        while (text != null) {
+            for (Match m : engine.getMatches()) {
+                if (m.getSecondPlayer() == null) {
+                    byeCount.merge(m.getFirstPlayer(), 1, Integer::sum);
+                }
+            }
+            engine.clearCurrentRound();
+            round++;
+            text = engine.generatePairings(new HashSet<>(), round);
+        }
+        for (Player p : players) {
+            assertEquals(1, byeCount.get(p), p.getFullName() + " should have exactly one bye");
+        }
+    }
+
+    @Test
+    public void testRoundRobin_oddPlayers_allPairsGenerated() {
+        Player p5 = new Player("Eve", "E", "ClubE", 1200);
+        List<Player> players = List.of(p1, p2, p3, p4, p5);
+        PairingEngine engine = new PairingEngine(players, 2, true);
+        Set<String> seenPairs = new HashSet<>();
+
+        int round = 1;
+        String text = engine.generatePairings(new HashSet<>(), round);
+        while (text != null) {
+            for (Match m : engine.getMatches()) {
+                if (m.getSecondPlayer() != null) {
+                    String key = m.getFirstPlayer().getFullName() + "||" + m.getSecondPlayer().getFullName();
+                    String keyRev = m.getSecondPlayer().getFullName() + "||" + m.getFirstPlayer().getFullName();
+                    assertFalse(seenPairs.contains(key) || seenPairs.contains(keyRev), "Duplicate pairing detected");
+                    seenPairs.add(key);
+                }
+            }
+            engine.clearCurrentRound();
+            round++;
+            text = engine.generatePairings(new HashSet<>(), round);
+        }
+        assertEquals(10, seenPairs.size());
+    }
+
+    @Test
+    public void testRoundRobin_twoPlayers_exactlyOneRound() {
+        PairingEngine engine = new PairingEngine(List.of(p1, p2), 1, true);
+        assertNotNull(engine.generatePairings(new HashSet<>(), 1));
+        engine.clearCurrentRound();
+        assertNull(engine.generatePairings(new HashSet<>(), 2));
+        assertTrue(engine.isFinished());
+    }
+
+    @Test
+    public void testFormatMatchesAsText_normalMatch_containsVs() {
+        PairingEngine engine = new PairingEngine(List.of(p1, p2), 1, false);
+        Match m = new Match(p1, p2, 3);
+        String text = engine.formatMatchesAsText(List.of(m));
+        assertTrue(text.contains("vs."));
+        assertTrue(text.contains("Tisch 3"));
+    }
+
+    @Test
+    public void testFormatMatchesAsText_byeMatch_containsFreilos() {
+        PairingEngine engine = new PairingEngine(List.of(p1, p2), 1, false);
+        Match bye = new Match(p1, null, -1);
+        String text = engine.formatMatchesAsText(List.of(bye));
+        assertTrue(text.contains("Freilos"));
+        assertFalse(text.contains("vs."));
+    }
 }

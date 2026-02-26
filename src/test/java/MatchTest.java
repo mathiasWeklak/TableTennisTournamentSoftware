@@ -88,24 +88,6 @@ public class MatchTest {
     }
 
     @Test
-    public void testIsEvaluated_defaultFalse() {
-        assertFalse(match.isEvaluated());
-    }
-
-    @Test
-    public void testSetEvaluated_toTrue() {
-        match.setEvaluated(true);
-        assertTrue(match.isEvaluated());
-    }
-
-    @Test
-    public void testSetEvaluated_backToFalse() {
-        match.setEvaluated(true);
-        match.setEvaluated(false);
-        assertFalse(match.isEvaluated());
-    }
-
-    @Test
     public void testByeMatch_secondPlayerIsNull() {
         Match bye = new Match(player1, null, 3);
         assertEquals(player1, bye.getFirstPlayer());

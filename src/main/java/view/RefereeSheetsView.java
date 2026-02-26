@@ -8,15 +8,33 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.util.List;
 
+/**
+ * View for previewing and printing referee sheets (Schiedsrichterzettel).
+ *
+ * <p>Displays one tab per match, each containing a read-only table with player names,
+ * set rows, and a total-result row. A print button delegates to
+ * {@link RefereeSheetsController#printRefereeSheets()}.</p>
+ */
 public class RefereeSheetsView extends JFrame {
 
     private final RefereeSheetsController controller;
 
+    /**
+     * Constructs the referee sheets view and immediately displays it.
+     *
+     * @param controller the controller providing the table model and print logic
+     * @param matches    the list of matches to display sheets for
+     */
     public RefereeSheetsView(RefereeSheetsController controller, List<Match> matches) {
         this.controller = controller;
         initializeUI(matches);
     }
 
+    /**
+     * Builds and displays the window with a tabbed pane containing one sheet per match.
+     *
+     * @param matches the list of matches to render
+     */
     private void initializeUI(List<Match> matches) {
         setTitle("Schiedsrichterzettel");
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -30,7 +48,7 @@ public class RefereeSheetsView extends JFrame {
         setContentPane(contentPane);
 
         JButton printButton = UITheme.createPrimaryButton("Schiedsrichterzettel drucken");
-        printButton.addActionListener(e -> controller.printRefereeSheets());
+        printButton.addActionListener(_ -> controller.printRefereeSheets());
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 4));
         buttonPanel.setBackground(UITheme.BACKGROUND);
@@ -63,6 +81,12 @@ public class RefereeSheetsView extends JFrame {
         setVisible(true);
     }
 
+    /**
+     * Applies custom styling to a referee sheet table, including row-specific background colors
+     * for the player header, alternating set rows, and the total-result row.
+     *
+     * @param table the table to configure
+     */
     private void configureTable(JTable table) {
         UITheme.applyTableStyling(table);
         table.setRowHeight(34);

@@ -8,13 +8,15 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.PlainDocument;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 /**
  * This class represents the controller for managing the result entry window.
  */
 public class ResultEntryController {
+
+    public record MatchPanelData(JTextField[][] setResultsFields, JTextField wonSetsField,
+                                 JTextField lostSetsField, Match match) {}
 
     private ResultEntryView view;
 
@@ -42,23 +44,21 @@ public class ResultEntryController {
      */
     public void saveResults(boolean showConfirmation) {
         Arrays.stream(view.getTabbedPane().getComponents())
-                .filter(component -> component instanceof JPanel)
-                .forEach(component -> {
-                    JPanel matchPanel = (JPanel) component;
-                    JTextField[][] setResultsFields = (JTextField[][]) matchPanel.getClientProperty("setResultsFields");
-                    JTextField wonSetsField = (JTextField) matchPanel.getClientProperty("wonSetsField");
-                    JTextField lostSetsField = (JTextField) matchPanel.getClientProperty("lostSetsField");
-                    Match match = (Match) matchPanel.getClientProperty("match");
+                .filter(c -> c instanceof JPanel)
+                .map(c -> (JPanel) c)
+                .forEach(matchPanel -> {
+                    MatchPanelData data = (MatchPanelData) matchPanel.getClientProperty("matchData");
+                    if (data == null) return;
 
                     IntStream.range(0, 5).forEach(i -> {
                         String[] result = new String[2];
-                        result[0] = setResultsFields[i][0].getText();
-                        result[1] = setResultsFields[i][1].getText();
-                        match.setResults(i, result);
+                        result[0] = data.setResultsFields()[i][0].getText();
+                        result[1] = data.setResultsFields()[i][1].getText();
+                        data.match().setResults(i, result);
                     });
 
-                    String overallResult = wonSetsField.getText() + ":" + lostSetsField.getText();
-                    match.setOverallResult(overallResult);
+                    String overallResult = data.wonSetsField().getText() + ":" + data.lostSetsField().getText();
+                    data.match().setOverallResult(overallResult);
                 });
 
         view.getTournamentRound().updateResultsTable();
@@ -68,36 +68,43 @@ public class ResultEntryController {
     }
 
     /**
-     * Document listener that updates overall results based on set results changes.
+     * Recalculates the overall result (sets won/lost) for a match panel based on the
+     * currently entered individual set scores. Updates the read-only summary fields
+     * in the panel accordingly.
+     *
+     * @param matchPanel the match panel whose score fields should be read and whose
+     *                   summary fields should be updated
      */
     public void updateOverallResult(JPanel matchPanel) {
-        JTextField[][] setResultsFields = (JTextField[][]) matchPanel.getClientProperty("setResultsFields");
-        JTextField wonSetsField = (JTextField) matchPanel.getClientProperty("wonSetsField");
-        JTextField lostSetsField = (JTextField) matchPanel.getClientProperty("lostSetsField");
+        MatchPanelData data = (MatchPanelData) matchPanel.getClientProperty("matchData");
+        if (data == null) return;
 
-        if (setResultsFields == null || wonSetsField == null || lostSetsField == null) {
-            return;
-        }
+        JTextField[][] setResultsFields = data.setResultsFields();
+        JTextField wonSetsField = data.wonSetsField();
+        JTextField lostSetsField = data.lostSetsField();
 
-        AtomicInteger wonSets = new AtomicInteger();
-        AtomicInteger lostSets = new AtomicInteger();
-
-        IntStream.range(0, 5)
-                .forEach(i -> {
+        int wonSets = (int) IntStream.range(0, 5)
+                .filter(i -> {
                     try {
-                        int firstPlayerScore = Integer.parseInt(setResultsFields[i][0].getText());
-                        int secondPlayerScore = Integer.parseInt(setResultsFields[i][1].getText());
-                        if (firstPlayerScore > secondPlayerScore) {
-                            wonSets.getAndIncrement();
-                        } else if (secondPlayerScore > firstPlayerScore) {
-                            lostSets.getAndIncrement();
-                        }
-                    } catch (NumberFormatException ignored) {
+                        return Integer.parseInt(setResultsFields[i][0].getText())
+                                > Integer.parseInt(setResultsFields[i][1].getText());
+                    } catch (NumberFormatException _) {
+                        return false;
                     }
-                });
+                }).count();
 
-        wonSetsField.setText(String.valueOf(wonSets.get()));
-        lostSetsField.setText(String.valueOf(lostSets.get()));
+        int lostSets = (int) IntStream.range(0, 5)
+                .filter(i -> {
+                    try {
+                        return Integer.parseInt(setResultsFields[i][1].getText())
+                                > Integer.parseInt(setResultsFields[i][0].getText());
+                    } catch (NumberFormatException _) {
+                        return false;
+                    }
+                }).count();
+
+        wonSetsField.setText(String.valueOf(wonSets));
+        lostSetsField.setText(String.valueOf(lostSets));
     }
 
     /**
@@ -115,6 +122,11 @@ public class ResultEntryController {
      * Document that allows only positive integers to be entered into a text field.
      */
     public static class PositiveIntegerDocument extends PlainDocument {
+        /**
+         * {@inheritDoc}
+         * Filters out any non-digit characters before inserting, ensuring only
+         * non-negative integers can be typed into the associated text field.
+         */
         @Override
         public void insertString(int offs, String str, AttributeSet a) throws BadLocationException {
             StringBuilder sb = new StringBuilder();

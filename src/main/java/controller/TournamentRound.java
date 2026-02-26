@@ -16,7 +16,6 @@ import java.awt.print.PrinterException;
 import java.io.*;
 import java.util.*;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * UI controller for a tournament round. Delegates all pairing logic to {@link PairingEngine}
@@ -46,6 +45,11 @@ public class TournamentRound extends JFrame {
      * @param modus          {@code true} for Round Robin, {@code false} for Swiss System
      */
     public TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, boolean modus) {
+        this(playerList, tournamentName, tableNumber, modus, false);
+    }
+
+    private TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, boolean modus,
+                             boolean skipInitialPairing) {
         this.playerList = new ArrayList<>(playerList);
         this.tableNumber = tableNumber;
         this.modus = modus;
@@ -59,13 +63,13 @@ public class TournamentRound extends JFrame {
         setTitle("Turnierrunde");
         setSize(800, 680);
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());
         getContentPane().setBackground(UITheme.BACKGROUND);
 
         addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent windowEvent) {
-                if (JOptionPane.showConfirmDialog(null,
+                if (JOptionPane.showConfirmDialog(TournamentRound.this,
                         "Wollen Sie das Turnier wirklich beenden?", "Bestätigung",
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION) {
@@ -135,35 +139,44 @@ public class TournamentRound extends JFrame {
         JPanel bottomButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         bottomButtonPanel.setBackground(UITheme.BACKGROUND);
         JButton printTableButton = UITheme.createSecondaryButton("Tabelle drucken");
-        printTableButton.addActionListener(e -> printPlacementTable());
+        printTableButton.addActionListener(_ -> printPlacementTable());
         bottomButtonPanel.add(printTableButton);
         JButton nextRoundButton = UITheme.createPrimaryButton("Nächste Runde auslosen und starten");
-        nextRoundButton.addActionListener(e -> startNextRound());
+        nextRoundButton.addActionListener(_ -> startNextRound());
         bottomButtonPanel.add(nextRoundButton);
 
         bottomPanel.add(bottomButtonPanel, BorderLayout.SOUTH);
         add(bottomPanel, BorderLayout.SOUTH);
 
-        String pairingsText = pairingEngine.generatePairings(new HashSet<>(), currentRound);
-        if (pairingsText != null) {
-            pairingsTextArea.setText(pairingsText);
-        } else {
-            JOptionPane.showMessageDialog(this, "Es wurden bereits alle möglichen Kombinationen gespielt.",
-                    "Keine Paarungen mehr möglich", JOptionPane.INFORMATION_MESSAGE);
+        if (!skipInitialPairing) {
+            String pairingsText = pairingEngine.generatePairings(new HashSet<>(), currentRound);
+            if (pairingsText != null) {
+                pairingsTextArea.setText(pairingsText);
+            } else {
+                JOptionPane.showMessageDialog(this, "Es wurden bereits alle möglichen Kombinationen gespielt.",
+                        "Keine Paarungen mehr möglich", JOptionPane.INFORMATION_MESSAGE);
+            }
         }
         updateResultsTable();
     }
 
+    /**
+     * Builds and returns the action button panel displayed above the standings table.
+     * Contains buttons for viewing referee sheets, entering results, and (in Swiss mode)
+     * manipulating the pairings.
+     *
+     * @return the configured button panel
+     */
     private JPanel getButtonsPanel() {
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
         bottomPanel.setBackground(UITheme.BACKGROUND);
 
         JButton previewRefereeSheetsButton = UITheme.createSecondaryButton("Schiedsrichterzettel anzeigen");
-        previewRefereeSheetsButton.addActionListener(e -> previewRefereeSheets());
+        previewRefereeSheetsButton.addActionListener(_ -> previewRefereeSheets());
         bottomPanel.add(previewRefereeSheetsButton);
 
         JButton resultEntryButton = UITheme.createPrimaryButton("Ergebnisse erfassen");
-        resultEntryButton.addActionListener(e -> {
+        resultEntryButton.addActionListener(_ -> {
             new ResultEntryController(pairingEngine.getMatches(), this);
             updateResultsTable();
         });
@@ -175,9 +188,16 @@ public class TournamentRound extends JFrame {
         return bottomPanel;
     }
 
+    /**
+     * Creates the "Setzung manipulieren" button, which opens the {@link MatchManagerController}
+     * to allow manual override of the current round's pairings. The button is disabled
+     * (shows a warning) if any results have already been entered for the current round.
+     *
+     * @return the configured manipulate button
+     */
     private JButton getManipulateButton() {
         JButton manipulateSettingButton = UITheme.createSecondaryButton("Setzung manipulieren");
-        manipulateSettingButton.addActionListener(e -> {
+        manipulateSettingButton.addActionListener(_ -> {
             boolean resultsEntered = pairingEngine.getMatches().stream()
                     .anyMatch(match -> match.getSecondPlayer() != null && !match.getOverallResult().isEmpty());
 
@@ -185,7 +205,7 @@ public class TournamentRound extends JFrame {
                 List<Match> allPossibleOpenMatches = pairingEngine.calculateAllPossibleOpenMatches();
                 allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
                 Set<Match> uniqueMatches = new HashSet<>(allPossibleOpenMatches);
-                new MatchManagerController(uniqueMatches, playerList.size(), this).view.setVisible(true);
+                new MatchManagerController(uniqueMatches, playerList.size(), this).getView().setVisible(true);
             } else {
                 JOptionPane.showMessageDialog(this,
                         "Setzung kann nicht manipuliert werden, da bereits Ergebnisse eingetragen wurden.",
@@ -195,6 +215,10 @@ public class TournamentRound extends JFrame {
         return manipulateSettingButton;
     }
 
+    /**
+     * Recalculates all player statistics via {@link ScoreCalculator} and refreshes
+     * the standings table in the UI to reflect the latest results.
+     */
     public void updateResultsTable() {
         scoreCalculator.calculate(playerList);
 
@@ -207,6 +231,13 @@ public class TournamentRound extends JFrame {
         repaint();
     }
 
+    /**
+     * Builds the {@link DefaultTableModel} for the standings table.
+     * Columns differ between Swiss System (includes BHZ and fBHZ) and Round Robin mode.
+     *
+     * @param allPlayers the players to include, sorted and ranked before adding to the model
+     * @return the populated table model
+     */
     private DefaultTableModel getDefaultTableModel(List<Player> allPlayers) {
         List<Player> sorted = new ArrayList<>(allPlayers);
         sortPlayers(sorted);
@@ -236,6 +267,13 @@ public class TournamentRound extends JFrame {
         return tableModel;
     }
 
+    /**
+     * Builds the data array for a single row in the standings table.
+     *
+     * @param player the player for this row
+     * @param i      the zero-based rank index (displayed as {@code i + 1})
+     * @return the row data array
+     */
     private Object[] getRowData(Player player, int i) {
         String winsLosses = player.getWins() + ":" + player.getLosses();
         if (!modus) {
@@ -261,29 +299,31 @@ public class TournamentRound extends JFrame {
         }
     }
 
+    /**
+     * Sorts the player list in-place using the ranking criteria appropriate for the current mode.
+     *
+     * @param players the list of players to sort
+     */
     private void sortPlayers(List<Player> players) {
-        if (!modus) {
-            players.sort(Comparator.comparing(Player::getPoints)
-                    .thenComparing(Player::getBuchholz)
-                    .thenComparing(Player::getFeinBuchholz)
-                    .thenComparing(player -> player.getSetsWon() - player.getSetsLost())
-                    .thenComparing(player -> player.getBallsWon() - player.getBallsLost())
-                    .thenComparing(Player::getTtr));
-        } else {
-            players.sort(Comparator.comparing(Player::getPoints)
-                    .thenComparing(player -> player.getSetsWon() - player.getSetsLost())
-                    .thenComparing(player -> player.getBallsWon() - player.getBallsLost())
-                    .thenComparing(Player::getTtr));
-        }
+        PairingEngine.sortPlayersByRanking(players, modus);
     }
 
+    /**
+     * Opens the referee sheet preview window for all non-bye matches in the current round.
+     */
     private void previewRefereeSheets() {
         List<Match> matchesWithoutBye = pairingEngine.getMatches().stream()
                 .filter(match -> match.getSecondPlayer() != null)
-                .collect(Collectors.toList());
+                .toList();
         new RefereeSheetsController(matchesWithoutBye);
     }
 
+    /**
+     * Advances to the next round. Validates that all current-round results have been entered,
+     * increments the round counter, clears the current pairings, and generates new ones.
+     * Saves the tournament state after a successful transition.
+     * Shows a warning dialog if any results are still missing.
+     */
     public void startNextRound() {
         boolean unfinished = pairingEngine.getMatches().stream()
                 .anyMatch(match -> match.getSecondPlayer() != null
@@ -310,14 +350,25 @@ public class TournamentRound extends JFrame {
 
         saveTournamentState();
         updateResultsTable();
+
     }
 
+    /**
+     * Replaces the current round's pairings with the provided match selection and updates the UI.
+     * Delegates to {@link PairingEngine#setNewMatches(List)} for state management.
+     *
+     * @param selectedMatches the manually selected matches to use for the current round
+     */
     public void setNewMatches(List<Match> selectedMatches) {
         String text = pairingEngine.setNewMatches(selectedMatches);
         pairingsTextArea.setText(text);
         updateResultsTable();
     }
 
+    /**
+     * Sends the current standings table to the printer using the system print dialog.
+     * Shows an error dialog if printing fails.
+     */
     private void printPlacementTable() {
         try {
             resultsTable.print(
@@ -333,6 +384,11 @@ public class TournamentRound extends JFrame {
         }
     }
 
+    /**
+     * Serializes the current tournament state to a {@code .ser} file in the user's Documents
+     * folder. The file name is derived from the tournament name and the current round number.
+     * Shows an error dialog if the file cannot be written.
+     */
     private void saveTournamentState() {
         String sanitizedName = tournamentName.replaceAll("[^a-zA-Z0-9-_.]", "_");
         String fileName = sanitizedName + "_Runde_" + currentRound + ".ser";
@@ -366,16 +422,23 @@ public class TournamentRound extends JFrame {
                 new ArrayList<>(state.playerList()),
                 state.tournamentName(),
                 state.tableCount(),
-                state.modus()
+                state.modus(),
+                true
         );
         round.currentRound = state.currentRound();
         round.currentRoundLabel.setText("Runde " + state.currentRound());
         round.pairingEngine.restoreState(state.allMatches(), state.matches());
         round.pairingEngine.setFinished(state.finished());
+        round.pairingsTextArea.setText(round.pairingEngine.formatMatchesAsText(state.matches()));
         round.updateResultsTable();
         return round;
     }
 
+    /**
+     * Returns the matches scheduled for the current round.
+     *
+     * @return the current round's match list
+     */
     public List<Match> getMatches() {
         return pairingEngine.getMatches();
     }

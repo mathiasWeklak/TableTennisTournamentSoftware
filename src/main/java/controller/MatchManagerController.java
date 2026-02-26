@@ -10,6 +10,8 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  * Controller class for managing matches in a tournament.
@@ -22,7 +24,7 @@ public class MatchManagerController {
     private final int playerCount;
     private final TournamentRound tournamentRound;
     private Match lastSelectedPossibleMatch = null;
-    final MatchManagerView view;
+    private final MatchManagerView view;
 
     /**
      * Constructs a MatchManagerController.
@@ -68,11 +70,11 @@ public class MatchManagerController {
             }
         });
 
-        view.getDownButton().addActionListener(e -> moveMatchToSelected());
+        view.getDownButton().addActionListener(_ -> moveMatchToSelected());
 
-        view.getUpButton().addActionListener(e -> moveMatchToPossible());
+        view.getUpButton().addActionListener(_ -> moveMatchToPossible());
 
-        view.getCommitButton().addActionListener(e -> commitSelectedMatches());
+        view.getCommitButton().addActionListener(_ -> commitSelectedMatches());
     }
 
     /**
@@ -101,7 +103,7 @@ public class MatchManagerController {
             Match selectedMatch = possibleMatchesModel.getElementAt(index);
             possibleMatchesModel.remove(index);
             selectedMatchesModel.addElement(selectedMatch);
-            addSelectedPlayers(selectedMatchesModel, possibleMatchesModel, allPossibleMatches);
+            refreshAvailableMatches(selectedMatchesModel, possibleMatchesModel, allPossibleMatches);
         }
     }
 
@@ -114,39 +116,37 @@ public class MatchManagerController {
             Match selectedMatch = selectedMatchesModel.getElementAt(index);
             selectedMatchesModel.remove(index);
             possibleMatchesModel.addElement(selectedMatch);
-            addSelectedPlayers(selectedMatchesModel, possibleMatchesModel, allPossibleMatches);
+            refreshAvailableMatches(selectedMatchesModel, possibleMatchesModel, allPossibleMatches);
         }
     }
 
     /**
-     * Updates the possible matches list by removing matches that contain players already selected.
+     * Refreshes the possible matches list by removing matches that contain players already selected.
      * Also ensures that no duplicate players are selected and handles the case of a bye (freilos).
      *
      * @param selectedMatchesModel The model containing the selected matches.
      * @param possibleMatchesModel The model containing the possible matches.
      * @param allPossibleMatches List of all possible matches.
      */
-    static void addSelectedPlayers(DefaultListModel<Match> selectedMatchesModel, DefaultListModel<Match> possibleMatchesModel, List<Match> allPossibleMatches) {
-        List<Player> selectedPlayers = new ArrayList<>();
-        boolean freilosSelected = false;
-        for (int i = 0; i < selectedMatchesModel.getSize(); i++) {
-            Match match = selectedMatchesModel.getElementAt(i);
-            selectedPlayers.add(match.getFirstPlayer());
-            if (match.getSecondPlayer() != null) {
-                selectedPlayers.add(match.getSecondPlayer());
-            } else {
-                freilosSelected = true;
-            }
-        }
+    static void refreshAvailableMatches(DefaultListModel<Match> selectedMatchesModel, DefaultListModel<Match> possibleMatchesModel, List<Match> allPossibleMatches) {
+        var selected = IntStream.range(0, selectedMatchesModel.getSize())
+                .mapToObj(selectedMatchesModel::getElementAt)
+                .toList();
+
+        boolean freilosSelected = selected.stream().anyMatch(m -> m.getSecondPlayer() == null);
+
+        List<Player> selectedPlayers = selected.stream()
+                .flatMap(m -> m.getSecondPlayer() != null
+                        ? Stream.of(m.getFirstPlayer(), m.getSecondPlayer())
+                        : Stream.of(m.getFirstPlayer()))
+                .toList();
 
         possibleMatchesModel.clear();
-        for (Match match : allPossibleMatches) {
-            if ((!selectedPlayers.contains(match.getFirstPlayer()) &&
-                    (match.getSecondPlayer() == null || !selectedPlayers.contains(match.getSecondPlayer()))) &&
-                    (!freilosSelected || match.getSecondPlayer() != null)) {
-                possibleMatchesModel.addElement(match);
-            }
-        }
+        allPossibleMatches.stream()
+                .filter(m -> (!selectedPlayers.contains(m.getFirstPlayer()) &&
+                        (m.getSecondPlayer() == null || !selectedPlayers.contains(m.getSecondPlayer()))) &&
+                        (!freilosSelected || m.getSecondPlayer() != null))
+                .forEach(possibleMatchesModel::addElement);
     }
 
     /**
@@ -160,26 +160,25 @@ public class MatchManagerController {
             return;
         }
 
-        boolean freilosSelected = false;
-        for (int i = 0; i < selectedMatchesModel.getSize(); i++) {
-            if (selectedMatchesModel.getElementAt(i).getSecondPlayer() == null) {
-                freilosSelected = true;
-                break;
-            }
-        }
+        boolean freilosSelected = IntStream.range(0, selectedMatchesModel.getSize())
+                .mapToObj(selectedMatchesModel::getElementAt)
+                .anyMatch(m -> m.getSecondPlayer() == null);
 
         if (playerCount % 2 != 0 && !freilosSelected) {
             JOptionPane.showMessageDialog(view, "Bei ungerader Spieleranzahl muss ein Freilos-Spiel ausgewählt sein.");
             return;
         }
 
-        List<Match> selectedMatches = new ArrayList<>();
-        for (int i = 0; i < selectedMatchesModel.getSize(); i++) {
-            selectedMatches.add(selectedMatchesModel.getElementAt(i));
-        }
+        List<Match> selectedMatches = IntStream.range(0, selectedMatchesModel.getSize())
+                .mapToObj(selectedMatchesModel::getElementAt)
+                .toList();
 
         tournamentRound.setNewMatches(selectedMatches);
         JOptionPane.showMessageDialog(view, "Ausgewählte Begegnungen wurden als neue Setzung übernommen.");
         view.dispose();
+    }
+
+    public MatchManagerView getView() {
+        return view;
     }
 }

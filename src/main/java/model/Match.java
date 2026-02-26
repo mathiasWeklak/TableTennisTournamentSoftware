@@ -15,7 +15,6 @@ public class Match implements Serializable {
     private int tableNumber;
     private final Result result;
     private String overallResult;
-    private boolean evaluated = false;
 
     /**
      * Constructs a match between two players at a specific table.
@@ -105,29 +104,6 @@ public class Match implements Serializable {
     public void setTable(Integer tableNumber) {
         this.tableNumber = tableNumber;
     }
-
-    /**
-     * Returns whether this match has already been evaluated for score and statistics calculations.
-     *
-     * @return {@code true} if the match has been processed and counted, {@code false} otherwise
-     */
-    public boolean isEvaluated() {
-        return evaluated;
-    }
-
-
-    /**
-     * Sets the evaluation status of this match.
-     *
-     * <p>If set to {@code true}, the match is considered already processed during
-     * score calculation and will be skipped in future evaluations to avoid double counting.</p>
-     *
-     * @param evaluated {@code true} to mark the match as evaluated; {@code false} otherwise
-     */
-    public void setEvaluated(boolean evaluated) {
-        this.evaluated = evaluated;
-    }
-
 
     @Override
     public boolean equals(Object o) {

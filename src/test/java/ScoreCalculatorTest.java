@@ -291,6 +291,46 @@ public class ScoreCalculatorTest {
     }
 
     @Test
+    public void testCalculate_nonNumericOverallResultParts_doesNotUpdateStats() {
+        Match match = new Match(p1, p2, 1);
+        match.setOverallResult("abc:def");
+        List<Match> matches = new ArrayList<>(List.of(match));
+        ScoreCalculator calc = new ScoreCalculator(matches);
+        calc.calculate(List.of(p1, p2));
+
+        assertEquals(0, p1.getPoints());
+        assertEquals(0, p2.getPoints());
+        assertEquals(0, p1.getSetsWon());
+        assertEquals(0, p2.getSetsWon());
+    }
+
+    @Test
+    public void testCalculate_nonNumericSetScore_isSkipped() {
+        Match match = new Match(p1, p2, 1);
+        match.setOverallResult("3:0");
+        match.setResults(0, new String[]{"abc", "def"});
+        match.setResults(1, new String[]{"11", "7"});
+        match.setResults(2, new String[]{"11", "5"});
+        List<Match> matches = new ArrayList<>(List.of(match));
+        ScoreCalculator calc = new ScoreCalculator(matches);
+        calc.calculate(List.of(p1, p2));
+
+        assertEquals(22, p1.getBallsWon());
+        assertEquals(12, p1.getBallsLost());
+    }
+
+    @Test
+    public void testCalculate_duplicateByeMatchesDoNotMutateOriginalList() {
+        Match bye1 = new Match(p1, null, 1);
+        Match bye2 = new Match(p1, null, 2);
+        List<Match> matches = new ArrayList<>(List.of(bye1, bye2));
+        ScoreCalculator calc = new ScoreCalculator(matches);
+        calc.calculate(List.of(p1));
+
+        assertEquals(2, matches.size());
+    }
+
+    @Test
     public void testCalculate_emptyMatchList_allStatsRemainZero() {
         List<Match> matches = new ArrayList<>();
         ScoreCalculator calc = new ScoreCalculator(matches);

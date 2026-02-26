@@ -4,6 +4,14 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
+/**
+ * Main setup view for the tournament. Allows the user to enter a tournament name,
+ * the number of tables, select the tournament mode (Swiss or Round Robin), manage
+ * the player list, and start the tournament.
+ *
+ * <p>The view is purely presentational; all logic is delegated to
+ * {@link controller.TournamentController}.</p>
+ */
 public class TournamentView extends JFrame {
     private final JList<String> playerJList;
     private final DefaultListModel<String> playerListModel;
@@ -15,6 +23,9 @@ public class TournamentView extends JFrame {
     private final JButton beginTournamentButton;
     private final JMenuItem loadMenuItem;
 
+    /**
+     * Constructs and lays out the tournament setup window.
+     */
     public TournamentView() {
         setTitle("Tischtennis Turniersoftware");
         setSize(780, 540);
@@ -113,44 +124,95 @@ public class TournamentView extends JFrame {
         this.loadMenuItem = loadTournamentItem;
     }
 
+    /**
+     * Creates a {@link JLabel} styled with the standard body font.
+     *
+     * @param text the label text
+     * @return the styled label
+     */
     private static JLabel makeLabel(String text) {
         JLabel lbl = new JLabel(text);
         lbl.setFont(UITheme.FONT_BODY);
         return lbl;
     }
 
+    /**
+     * Returns the player list component.
+     *
+     * @return the player {@link JList}
+     */
     public JList<String> getPlayerJList() {
         return playerJList;
     }
 
+    /**
+     * Returns the list model backing the player list.
+     *
+     * @return the player list model
+     */
     public DefaultListModel<String> getPlayerListModel() {
         return playerListModel;
     }
 
+    /**
+     * Returns the tournament name input field.
+     *
+     * @return the tournament name text field
+     */
     public JTextField getTournamentNameField() {
         return tournamentNameField;
     }
 
+    /**
+     * Returns the table count input field.
+     *
+     * @return the table count text field
+     */
     public JTextField getTableCountField() {
         return tableCountField;
     }
 
+    /**
+     * Returns the mode checkbox ({@code true} = Round Robin, {@code false} = Swiss System).
+     *
+     * @return the mode checkbox
+     */
     public JCheckBox getModusField() {
         return modusField;
     }
 
+    /**
+     * Returns the "add player" button.
+     *
+     * @return the add player button
+     */
     public JButton getAddPlayerButton() {
         return addPlayerButton;
     }
 
+    /**
+     * Returns the "remove player" button.
+     *
+     * @return the remove player button
+     */
     public JButton getRemovePlayerButton() {
         return removePlayerButton;
     }
 
+    /**
+     * Returns the "begin tournament" button.
+     *
+     * @return the begin tournament button
+     */
     public JButton getBeginTournamentButton() {
         return beginTournamentButton;
     }
 
+    /**
+     * Returns the "load tournament" menu item.
+     *
+     * @return the load menu item
+     */
     public JMenuItem getLoadMenuItem() {
         return loadMenuItem;
     }

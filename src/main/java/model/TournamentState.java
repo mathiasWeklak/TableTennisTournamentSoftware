@@ -1,6 +1,5 @@
 package model;
 
-import java.io.ObjectOutputStream;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
@@ -12,7 +11,7 @@ import java.util.List;
  * including all relevant data such as players, match history, current round,
  * tournament configuration, and the current round's active pairings.</p>
  *
- * <p>It is intended for use with Java serialization (via {@link ObjectOutputStream})
+ * <p>It is intended for use with Java serialization (via {@link java.io.ObjectOutputStream})
  * and can be deserialized to fully reconstruct a {@link controller.TournamentRound}
  * using {@code fromSavedState()}.</p>
  *

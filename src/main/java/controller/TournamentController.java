@@ -33,10 +33,10 @@ public class TournamentController {
         this.view = view;
         this.playerList = new ArrayList<>();
 
-        view.getAddPlayerButton().addActionListener(e -> addPlayer());
-        view.getRemovePlayerButton().addActionListener(e -> removePlayer());
-        view.getBeginTournamentButton().addActionListener(e -> beginTournament());
-        view.getLoadMenuItem().addActionListener(e -> loadTournamentFromFile());
+        view.getAddPlayerButton().addActionListener(_ -> addPlayer());
+        view.getRemovePlayerButton().addActionListener(_ -> removePlayer());
+        view.getBeginTournamentButton().addActionListener(_ -> beginTournament());
+        view.getLoadMenuItem().addActionListener(_ -> loadTournamentFromFile());
 
         view.addWindowListener(new WindowAdapter() {
             @Override
@@ -71,14 +71,14 @@ public class TournamentController {
 
         int result;
         do {
-            result = JOptionPane.showConfirmDialog(null, myPanel,
+            result = JOptionPane.showConfirmDialog(view, myPanel,
                     "Spieler hinzufügen", JOptionPane.OK_CANCEL_OPTION);
             if (result == JOptionPane.OK_OPTION) {
                 String firstName = firstNameField.getText().trim();
                 String lastName = lastNameField.getText().trim();
                 String club = clubField.getText().trim();
                 if (firstName.isEmpty() || lastName.isEmpty() || club.isEmpty()) {
-                    JOptionPane.showMessageDialog(null, "Bitte füllen Sie alle Pflichtfelder aus.");
+                    JOptionPane.showMessageDialog(view, "Bitte füllen Sie alle Pflichtfelder aus.");
                     continue;
                 }
                 int ttr = 0;
@@ -91,10 +91,14 @@ public class TournamentController {
                         throw new NumberFormatException();
                     }
                 } catch (NumberFormatException e) {
-                    JOptionPane.showMessageDialog(null, "Bitte geben Sie einen ganzzahligen positiven TTR-Wert ein oder lassen Sie das Feld leer.");
+                    JOptionPane.showMessageDialog(view, "Bitte geben Sie einen ganzzahligen positiven TTR-Wert ein oder lassen Sie das Feld leer.");
                     continue;
                 }
                 Player newPlayer = new Player(firstName, lastName, club, ttr);
+                if (playerList.contains(newPlayer)) {
+                    JOptionPane.showMessageDialog(view, "Ein Spieler mit diesem Namen und Verein ist bereits in der Liste.");
+                    continue;
+                }
                 playerList.add(newPlayer);
                 updatePlayerList();
                 break;
@@ -112,7 +116,7 @@ public class TournamentController {
             playerList.remove(selectedIndex);
             updatePlayerList();
         } else {
-            JOptionPane.showMessageDialog(null, "Bitte wählen Sie einen Spieler aus der Liste aus.");
+            JOptionPane.showMessageDialog(view, "Bitte wählen Sie einen Spieler aus der Liste aus.");
         }
     }
 
@@ -135,7 +139,7 @@ public class TournamentController {
     private void beginTournament() {
         String tournamentName = view.getTournamentNameField().getText().trim();
         if (tournamentName.isEmpty()) {
-            JOptionPane.showMessageDialog(null, "Bitte geben Sie einen Turniernamen ein.");
+            JOptionPane.showMessageDialog(view, "Bitte geben Sie einen Turniernamen ein.");
             return;
         }
 
@@ -146,7 +150,12 @@ public class TournamentController {
                 throw new NumberFormatException();
             }
         } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(null, "Bitte geben Sie eine positive ganze Zahl für die Anzahl der Tische ein.");
+            JOptionPane.showMessageDialog(view, "Bitte geben Sie eine positive ganze Zahl für die Anzahl der Tische ein.");
+            return;
+        }
+
+        if (playerList.size() < 2) {
+            JOptionPane.showMessageDialog(view, "Bitte fügen Sie mindestens 2 Spieler hinzu.");
             return;
         }
 
@@ -160,16 +169,15 @@ public class TournamentController {
      * @return true if the user confirms to close the application, false otherwise.
      */
     private boolean confirmAction() {
-        int result = JOptionPane.showConfirmDialog(null, "Wollen Sie das Programm wirklich beenden?", "Bestätigung", JOptionPane.YES_NO_OPTION);
+        int result = JOptionPane.showConfirmDialog(view, "Wollen Sie das Programm wirklich beenden?", "Bestätigung", JOptionPane.YES_NO_OPTION);
         return result == JOptionPane.YES_OPTION;
     }
 
     /**
      * Main method to start the application.
      *
-     * @param args Command-line arguments (unused).
      */
-    public static void main(String[] args) {
+    static void main() {
         UITheme.applyLookAndFeel();
         SwingUtilities.invokeLater(() -> {
             TournamentView view = new TournamentView();
@@ -207,7 +215,7 @@ public class TournamentController {
                 round.setVisible(true);
                 view.dispose();
 
-            } catch (IOException | ClassNotFoundException e) {
+            } catch (IOException | ClassNotFoundException _) {
                 JOptionPane.showMessageDialog(view, "Fehler beim Laden der Datei.", "Fehler", JOptionPane.ERROR_MESSAGE);
             }
         }

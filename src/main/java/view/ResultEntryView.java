@@ -14,12 +14,27 @@ import java.awt.event.WindowEvent;
 import java.util.List;
 import java.util.stream.IntStream;
 
+/**
+ * View for entering match results during a tournament round.
+ *
+ * <p>Displays one tab per non-bye match. Each tab contains per-set score fields for both
+ * players and read-only summary fields that update automatically as set scores are entered.
+ * Saving (either via button or window close) delegates to
+ * {@link ResultEntryController#saveResults(boolean)}.</p>
+ */
 public class ResultEntryView extends JFrame {
 
     private final JTabbedPane tabbedPane;
     private final TournamentRound tournamentRound;
     private final ResultEntryController controller;
 
+    /**
+     * Constructs the result entry window and displays it.
+     *
+     * @param controller      the controller handling save and auto-update logic
+     * @param matches         the list of matches whose results can be entered
+     * @param tournamentRound the tournament round, used to update the standings table on save
+     */
     public ResultEntryView(ResultEntryController controller, List<Match> matches, TournamentRound tournamentRound) {
         this.controller = controller;
         this.tournamentRound = tournamentRound;
@@ -37,7 +52,7 @@ public class ResultEntryView extends JFrame {
                 .forEach(match -> tabbedPane.addTab("Tisch " + match.getTableNumber(), createMatchPanel(match)));
 
         JButton saveButton = UITheme.createPrimaryButton("Ergebnisse speichern");
-        saveButton.addActionListener(e -> controller.saveResults(true));
+        saveButton.addActionListener(_ -> controller.saveResults(true));
 
         JPanel savePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
         savePanel.setBackground(UITheme.BACKGROUND);
@@ -58,6 +73,14 @@ public class ResultEntryView extends JFrame {
         setVisible(true);
     }
 
+    /**
+     * Builds the result-entry panel for a single match.
+     * Contains per-set score input fields and read-only overall-result summary fields.
+     * The panel stores its field references as client properties for retrieval by the controller.
+     *
+     * @param match the match for which to build the entry panel
+     * @return the configured match panel
+     */
     private JPanel createMatchPanel(Match match) {
         JPanel matchPanel = new JPanel(new BorderLayout());
         matchPanel.setBackground(UITheme.BACKGROUND);
@@ -171,46 +194,73 @@ public class ResultEntryView extends JFrame {
         scoreCard.add(gridPanel, BorderLayout.CENTER);
         matchPanel.add(scoreCard, BorderLayout.CENTER);
 
-        matchPanel.putClientProperty("setResultsFields", setResultsFields);
-        matchPanel.putClientProperty("wonSetsField", wonSetsField);
-        matchPanel.putClientProperty("lostSetsField", lostSetsField);
-        matchPanel.putClientProperty("match", match);
+        matchPanel.putClientProperty("matchData",
+                new ResultEntryController.MatchPanelData(setResultsFields, wonSetsField, lostSetsField, match));
 
         return matchPanel;
     }
 
+    /**
+     * Applies standard styling to a score input field (centered text, fixed size, body font).
+     *
+     * @param field the text field to style
+     */
     private static void styleScoreField(JTextField field) {
         field.setFont(UITheme.FONT_BODY);
         field.setHorizontalAlignment(SwingConstants.CENTER);
         field.setPreferredSize(new Dimension(60, 28));
     }
 
+    /**
+     * Returns the tabbed pane containing one result-entry tab per match.
+     * Used by the controller to iterate over match panels and read entered scores.
+     *
+     * @return the tabbed pane
+     */
     public JTabbedPane getTabbedPane() {
         return tabbedPane;
     }
 
+    /**
+     * Returns the tournament round associated with this view.
+     * Used by the controller to trigger a standings table refresh after saving results.
+     *
+     * @return the tournament round
+     */
     public TournamentRound getTournamentRound() {
         return tournamentRound;
     }
 
+    /**
+     * Document listener that triggers an overall-result recalculation whenever a set score
+     * field is modified.
+     */
     private class ResultDocumentListener implements DocumentListener {
 
         private final JPanel matchPanel;
 
+        /**
+         * Constructs a listener bound to the given match panel.
+         *
+         * @param matchPanel the panel containing the score fields to monitor
+         */
         ResultDocumentListener(JPanel matchPanel) {
             this.matchPanel = matchPanel;
         }
 
+        /** {@inheritDoc} */
         @Override
         public void insertUpdate(DocumentEvent e) {
             controller.updateOverallResult(matchPanel);
         }
 
+        /** {@inheritDoc} */
         @Override
         public void removeUpdate(DocumentEvent e) {
             controller.updateOverallResult(matchPanel);
         }
 
+        /** {@inheritDoc} */
         @Override
         public void changedUpdate(DocumentEvent e) {
             controller.updateOverallResult(matchPanel);
