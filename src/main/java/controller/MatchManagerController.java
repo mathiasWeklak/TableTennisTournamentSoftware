@@ -25,7 +25,6 @@ public class MatchManagerController {
     private final List<Match> allPossibleMatches;
     private final int playerCount;
     private final TournamentRound tournamentRound;
-    private Match lastSelectedPossibleMatch = null;
     private final MatchManagerView view;
 
     /**
@@ -58,8 +57,8 @@ public class MatchManagerController {
     private void addListeners() {
         view.getPossibleMatchesList().addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {
-                if (SwingUtilities.isLeftMouseButton(e)) {
-                    handlePossibleMatchSelection();
+                if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
+                    moveMatchToSelected();
                 }
             }
         });
@@ -77,23 +76,6 @@ public class MatchManagerController {
         view.getUpButton().addActionListener(_ -> moveMatchToPossible());
 
         view.getCommitButton().addActionListener(_ -> commitSelectedMatches());
-    }
-
-    /**
-     * Handles the selection of a possible match.
-     * If the same match is selected twice consecutively, it is moved to the selected matches list.
-     */
-    private void handlePossibleMatchSelection() {
-        int index = view.getPossibleMatchesList().getSelectedIndex();
-        if (index != -1) {
-            Match selectedMatch = possibleMatchesModel.getElementAt(index);
-            if (selectedMatch.equals(lastSelectedPossibleMatch)) {
-                moveMatchToSelected();
-                lastSelectedPossibleMatch = null;
-            } else {
-                lastSelectedPossibleMatch = selectedMatch;
-            }
-        }
     }
 
     /**

@@ -25,7 +25,7 @@ build/            – Build output
 
 ## Language & Runtime
 **Language**: Java  
-**Version**: Java 21 (source & target compatibility), Java 21+ required at runtime  
+**Version**: Java 25 (source & target compatibility), Java 25+ required at runtime  
 **Build System**: Gradle 8.14  
 **Package Manager**: Gradle (Maven Central for dependencies)
 
@@ -34,7 +34,7 @@ build/            – Build output
 - Java Swing (JDK built-in) – UI framework
 
 **Development / Test Dependencies**:
-- `org.junit.jupiter:junit-jupiter:5.11.0-M2` – JUnit 5 for testing
+- `org.junit.jupiter:junit-jupiter:5.12.0` – JUnit 5 for testing
 
 ## Build & Installation
 ```bash
@@ -49,7 +49,7 @@ build/            – Build output
 ```
 
 **Main Entry Point**: `controller.TournamentController` (Gradle `run` task)  
-**JAR Main Class**: `controller.TournamentSoftware`
+**JAR Main Class**: `controller.TournamentController`
 
 ## Testing
 **Framework**: JUnit Jupiter 5 (JUnit 5)  

@@ -1,5 +1,7 @@
 import static org.junit.jupiter.api.Assertions.*;
 
+import static model.Match.MAX_SETS;
+
 import model.Match;
 import model.Player;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +25,7 @@ public class MatchTest {
         assertEquals(player2, match.getSecondPlayer());
         assertEquals(1, match.getTableNumber());
         assertEquals("", match.getOverallResult());
-        assertEquals(5, match.getResults().length);
+        assertEquals(MAX_SETS, match.getResults().length);
     }
 
     @Test
@@ -42,14 +44,14 @@ public class MatchTest {
     public void testSetAndGetResults() {
         String[] setResult1 = {"11-9", "9-11"};
         match.setResults(0, setResult1);
-        assertEquals(setResult1, match.getResults()[0]);
+        assertArrayEquals(setResult1, match.getResults()[0]);
     }
 
     @Test
     public void testSetResultsInvalidIndex() {
         String[] setResult = {"11-9", "9-11"};
         assertThrows(IllegalArgumentException.class, () -> match.setResults(-1, setResult));
-        assertThrows(IllegalArgumentException.class, () -> match.setResults(5, setResult));
+        assertThrows(IllegalArgumentException.class, () -> match.setResults(MAX_SETS, setResult));
     }
 
     @Test
@@ -61,7 +63,7 @@ public class MatchTest {
     @Test
     public void testResultConstructorInitialization() {
         Match.Result result = new Match.Result();
-        assertEquals(5, result.getResults().length);
+        assertEquals(MAX_SETS, result.getResultsCopy().length);
     }
 
     @Test
@@ -69,7 +71,7 @@ public class MatchTest {
         Match.Result result = new Match.Result();
         String[] setResult1 = {"11-9", "9-11"};
         result.setResults(0, setResult1);
-        assertEquals(setResult1, result.getResults()[0]);
+        assertArrayEquals(setResult1, result.getResultsCopy()[0]);
     }
 
     @Test
@@ -77,7 +79,7 @@ public class MatchTest {
         Match.Result result = new Match.Result();
         String[] setResult = {"11-9", "9-11"};
         assertThrows(IllegalArgumentException.class, () -> result.setResults(-1, setResult));
-        assertThrows(IllegalArgumentException.class, () -> result.setResults(5, setResult));
+        assertThrows(IllegalArgumentException.class, () -> result.setResults(MAX_SETS, setResult));
     }
 
     @Test

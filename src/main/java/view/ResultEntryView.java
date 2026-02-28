@@ -1,7 +1,8 @@
 package view;
 
+import static model.Match.MAX_SETS;
+
 import controller.ResultEntryController;
-import controller.TournamentRound;
 import model.Match;
 
 import javax.swing.*;
@@ -9,6 +10,8 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.List;
@@ -25,7 +28,6 @@ import java.util.stream.IntStream;
 public class ResultEntryView extends JFrame {
 
     private final JTabbedPane tabbedPane;
-    private final TournamentRound tournamentRound;
     private final ResultEntryController controller;
 
     /**
@@ -33,11 +35,9 @@ public class ResultEntryView extends JFrame {
      *
      * @param controller      the controller handling save and auto-update logic
      * @param matches         the list of matches whose results can be entered
-     * @param tournamentRound the tournament round, used to update the standings table on save
      */
-    public ResultEntryView(ResultEntryController controller, List<Match> matches, TournamentRound tournamentRound) {
+    public ResultEntryView(ResultEntryController controller, List<Match> matches) {
         this.controller = controller;
-        this.tournamentRound = tournamentRound;
 
         setTitle("Ergebniserfassung");
         setLayout(new BorderLayout());
@@ -86,7 +86,7 @@ public class ResultEntryView extends JFrame {
         matchPanel.setBackground(UITheme.BACKGROUND);
         matchPanel.setBorder(new EmptyBorder(12, 16, 12, 16));
 
-        JTextField[][] setResultsFields = new JTextField[5][2];
+        JTextField[][] setResultsFields = new JTextField[MAX_SETS][2];
 
         JPanel scoreCard = new JPanel(new BorderLayout(0, 0));
         scoreCard.setBackground(UITheme.SURFACE);
@@ -123,7 +123,7 @@ public class ResultEntryView extends JFrame {
         gridPanel.add(sep, gbc);
         gbc.gridwidth = 1; gbc.insets = new Insets(3, 6, 3, 6);
 
-        IntStream.range(0, 5).forEach(i -> {
+        IntStream.range(0, MAX_SETS).forEach(i -> {
             setResultsFields[i][0] = controller.createIntegerField();
             setResultsFields[i][1] = controller.createIntegerField();
             styleScoreField(setResultsFields[i][0]);
@@ -143,10 +143,12 @@ public class ResultEntryView extends JFrame {
 
             setResultsFields[i][0].getDocument().addDocumentListener(new ResultDocumentListener(matchPanel));
             setResultsFields[i][1].getDocument().addDocumentListener(new ResultDocumentListener(matchPanel));
+            addAutoFillBehavior(setResultsFields[i][0], setResultsFields[i][1]);
+            addAutoFillBehavior(setResultsFields[i][1], setResultsFields[i][0]);
         });
 
         if (match.getResults() != null) {
-            IntStream.range(0, 5)
+            IntStream.range(0, MAX_SETS)
                     .filter(i -> match.getResults()[i] != null)
                     .forEach(i -> {
                         setResultsFields[i][0].setText(match.getResults()[i][0]);
@@ -222,13 +224,28 @@ public class ResultEntryView extends JFrame {
     }
 
     /**
-     * Returns the tournament round associated with this view.
-     * Used by the controller to trigger a standings table refresh after saving results.
-     *
-     * @return the tournament round
+     * Attaches a focus listener to {@code source} that auto-fills {@code target} when focus
+     * leaves {@code source}. Auto-fill rules: value 0–9 → target gets "11"; value 10 → target
+     * gets "12"; value ≥ 11 → no auto-fill. Auto-fill only triggers when {@code target} is empty.
      */
-    public TournamentRound getTournamentRound() {
-        return tournamentRound;
+    private static void addAutoFillBehavior(JTextField source, JTextField target) {
+        source.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusLost(FocusEvent e) {
+                if (!target.getText().isEmpty()) return;
+                String text = source.getText();
+                if (text.isEmpty()) return;
+                try {
+                    int value = Integer.parseInt(text);
+                    if (value <= 9) {
+                        target.setText("11");
+                    } else if (value == 10) {
+                        target.setText("12");
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        });
     }
 
     /**

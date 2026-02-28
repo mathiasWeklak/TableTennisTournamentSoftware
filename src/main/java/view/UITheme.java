@@ -77,13 +77,25 @@ public final class UITheme {
     }
 
     /**
-     * Creates a styled secondary action button. Currently identical to a primary button.
+     * Creates a styled secondary action button with a neutral outlined appearance,
+     * visually distinct from the primary button.
      *
      * @param text the button label
      * @return the configured {@link JButton}
      */
     public static JButton createSecondaryButton(String text) {
-        return createPrimaryButton(text);
+        JButton btn = new JButton(text);
+        btn.setFont(FONT_BODY);
+        btn.setBackground(SURFACE);
+        btn.setForeground(PRIMARY);
+        btn.setFocusPainted(false);
+        btn.setOpaque(true);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(PRIMARY, 1, true),
+            BorderFactory.createEmptyBorder(8, 17, 8, 17)
+        ));
+        return btn;
     }
 
     /**
@@ -143,8 +155,8 @@ public final class UITheme {
      */
     public static void setNameColumnWide(JTable table, int nameColumnIndex) {
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        int nameContentWidth = 0;
         for (int col = 0; col < table.getColumnCount(); col++) {
-            if (col == nameColumnIndex) continue;
             int width = 0;
             for (int row = -1; row < table.getRowCount(); row++) {
                 java.awt.Component c;
@@ -160,9 +172,17 @@ public final class UITheme {
                 }
                 width = Math.max(width, c.getPreferredSize().width);
             }
-            int finalWidth = width + 12;
-            table.getColumnModel().getColumn(col).setPreferredWidth(finalWidth);
-            table.getColumnModel().getColumn(col).setMaxWidth(finalWidth + 20);
+            if (col == nameColumnIndex) {
+                nameContentWidth = width + 12;
+            } else {
+                int finalWidth = width + 12;
+                table.getColumnModel().getColumn(col).setPreferredWidth(finalWidth);
+                table.getColumnModel().getColumn(col).setMaxWidth(finalWidth + 20);
+            }
+        }
+        if (nameContentWidth > 0) {
+            table.getColumnModel().getColumn(nameColumnIndex).setMinWidth(nameContentWidth);
+            table.getColumnModel().getColumn(nameColumnIndex).setPreferredWidth(nameContentWidth);
         }
     }
 

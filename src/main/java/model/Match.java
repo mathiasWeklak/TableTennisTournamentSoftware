@@ -2,6 +2,7 @@ package model;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -10,6 +11,7 @@ import java.util.Objects;
 public class Match implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
+    public static final int MAX_SETS = 5;
     private final Player firstPlayer;
     private final Player secondPlayer;
     private int tableNumber;
@@ -64,7 +66,7 @@ public class Match implements Serializable {
      * @return the set results as a 2D array of strings
      */
     public String[][] getResults() {
-        return result.getResults();
+        return result.getResultsCopy();
     }
 
     /**
@@ -109,8 +111,8 @@ public class Match implements Serializable {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Match other)) return false;
-        return Objects.equals(firstPlayer, other.firstPlayer)
-                && Objects.equals(secondPlayer, other.secondPlayer)
+        return (Objects.equals(firstPlayer, other.firstPlayer)
+                && Objects.equals(secondPlayer, other.secondPlayer))
                 || (Objects.equals(firstPlayer, other.secondPlayer)
                 && Objects.equals(secondPlayer, other.firstPlayer));
     }
@@ -134,16 +136,18 @@ public class Match implements Serializable {
          * Constructs a Result object initialized with empty set results.
          */
         public Result() {
-            this.setResults = new String[5][2];
+            this.setResults = new String[MAX_SETS][2];
         }
 
         /**
-         * Retrieves the set results.
+         * Returns a deep copy of the set results.
          *
-         * @return the set results as a 2D array of strings
+         * @return copy of the set results as a 2D array of strings
          */
-        public String[][] getResults() {
-            return setResults;
+        public String[][] getResultsCopy() {
+            return Arrays.stream(setResults)
+                    .map(row -> row == null ? null : row.clone())
+                    .toArray(String[][]::new);
         }
 
         /**
@@ -154,7 +158,7 @@ public class Match implements Serializable {
          * @throws IllegalArgumentException if the index is out of range or setResult array is invalid
          */
         public void setResults(int index, String[] setResult) {
-            if (index < 0 || index >= 5 || setResult == null || setResult.length != 2) {
+            if (index < 0 || index >= MAX_SETS || setResult == null || setResult.length != 2) {
                 throw new IllegalArgumentException("Invalid index or result data.");
             }
             this.setResults[index] = setResult;

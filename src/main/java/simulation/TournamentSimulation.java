@@ -2,6 +2,8 @@ package simulation;
 
 import controller.PairingEngine;
 import controller.ScoreCalculator;
+import static model.Match.MAX_SETS;
+
 import model.Match;
 import model.Player;
 import model.TournamentMode;
@@ -131,7 +133,7 @@ public class TournamentSimulation {
                             : new String[]{String.valueOf(loser), "11"};
                     match.setResults(i, setResult);
                 }
-                for (int i = totalSets; i < 5; i++) {
+                for (int i = totalSets; i < MAX_SETS; i++) {
                     match.setResults(i, new String[]{"", ""});
                 }
             }

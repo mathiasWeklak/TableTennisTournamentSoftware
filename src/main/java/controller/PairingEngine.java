@@ -254,20 +254,18 @@ public class PairingEngine {
 
     private boolean hasCompleteMatching(List<Player> remaining, Set<String> playedPairs) {
         if (remaining.isEmpty()) return true;
-        Player first = remaining.removeFirst();
-        for (int i = 0; i < remaining.size(); i++) {
-            Player candidate = remaining.get(i);
+        Player first = remaining.getFirst();
+        List<Player> rest = remaining.subList(1, remaining.size());
+        for (int i = 0; i < rest.size(); i++) {
+            Player candidate = rest.get(i);
             if (!playedPairs.contains(createCanonicalPairing(first, candidate))) {
-                remaining.remove(i);
-                if (hasCompleteMatching(remaining, playedPairs)) {
-                    remaining.add(i, candidate);
-                    remaining.addFirst(first);
+                List<Player> next = new ArrayList<>(rest);
+                next.remove(i);
+                if (hasCompleteMatching(next, playedPairs)) {
                     return true;
                 }
-                remaining.add(i, candidate);
             }
         }
-        remaining.addFirst(first);
         return false;
     }
 

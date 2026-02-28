@@ -144,4 +144,49 @@ public class PlayerTest {
         Player other = new Player("Jane", "Doe", "ClubA", 1500);
         assertNotEquals(player.hashCode(), other.hashCode());
     }
+
+    @Test
+    public void testConstructor_nullFirstName_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Player(null, "Doe", "ClubA", 1500));
+    }
+
+    @Test
+    public void testConstructor_blankFirstName_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Player("  ", "Doe", "ClubA", 1500));
+    }
+
+    @Test
+    public void testConstructor_nullLastName_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Player("John", null, "ClubA", 1500));
+    }
+
+    @Test
+    public void testConstructor_blankLastName_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Player("John", "  ", "ClubA", 1500));
+    }
+
+    @Test
+    public void testConstructor_nullClub_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Player("John", "Doe", null, 1500));
+    }
+
+    @Test
+    public void testConstructor_blankClub_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Player("John", "Doe", "  ", 1500));
+    }
+
+    @Test
+    public void testConstructor_negativeTtr_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Player("John", "Doe", "ClubA", -1));
+    }
+
+    @Test
+    public void testConstructor_zeroTtr_doesNotThrow() {
+        assertDoesNotThrow(() -> new Player("John", "Doe", "ClubA", 0));
+    }
+
+    @Test
+    public void testToString() {
+        assertEquals("John Doe (ClubA)", player.toString());
+    }
 }

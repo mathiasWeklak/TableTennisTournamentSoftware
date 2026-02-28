@@ -1,5 +1,7 @@
 package controller;
 
+import static model.Match.MAX_SETS;
+
 import model.Match;
 import view.ResultEntryView;
 import javax.swing.JOptionPane;
@@ -21,6 +23,7 @@ public class ResultEntryController {
                                  JTextField lostSetsField, Match match) {}
 
     private final ResultEntryView view;
+    private final TournamentRound tournamentRound;
 
     /**
      * Constructs a new ResultEntryController and immediately initializes the UI.
@@ -30,7 +33,8 @@ public class ResultEntryController {
      * @param tournamentRound The tournament round associated with the matches
      */
     public ResultEntryController(List<Match> matches, TournamentRound tournamentRound) {
-        this.view = new ResultEntryView(this, matches, tournamentRound);
+        this.tournamentRound = tournamentRound;
+        this.view = new ResultEntryView(this, matches);
     }
 
     /**
@@ -46,7 +50,7 @@ public class ResultEntryController {
                     MatchPanelData data = (MatchPanelData) matchPanel.getClientProperty("matchData");
                     if (data == null) return;
 
-                    IntStream.range(0, 5).forEach(i -> {
+                    IntStream.range(0, MAX_SETS).forEach(i -> {
                         String[] result = new String[2];
                         result[0] = data.setResultsFields()[i][0].getText();
                         result[1] = data.setResultsFields()[i][1].getText();
@@ -57,7 +61,7 @@ public class ResultEntryController {
                     data.match().setOverallResult(overallResult);
                 });
 
-        view.getTournamentRound().updateResultsTable();
+        tournamentRound.updateResultsTable();
         if (showConfirmation) {
             JOptionPane.showMessageDialog(view, "Ergebnisse gespeichert.");
         }
@@ -79,7 +83,7 @@ public class ResultEntryController {
         JTextField wonSetsField = data.wonSetsField();
         JTextField lostSetsField = data.lostSetsField();
 
-        int wonSets = (int) IntStream.range(0, 5)
+        int wonSets = (int) IntStream.range(0, MAX_SETS)
                 .filter(i -> {
                     try {
                         return Integer.parseInt(setResultsFields[i][0].getText())
@@ -89,7 +93,7 @@ public class ResultEntryController {
                     }
                 }).count();
 
-        int lostSets = (int) IntStream.range(0, 5)
+        int lostSets = (int) IntStream.range(0, MAX_SETS)
                 .filter(i -> {
                     try {
                         return Integer.parseInt(setResultsFields[i][1].getText())
@@ -104,24 +108,25 @@ public class ResultEntryController {
     }
 
     /**
-     * Creates a text field that only accepts positive integers.
+     * Creates a text field that only accepts non-negative integers without leading zeros.
      *
-     * @return JTextField configured to accept only positive integers
+     * @return JTextField configured to accept only non-negative integers
      */
     public JTextField createIntegerField() {
         JTextField textField = new JTextField();
-        textField.setDocument(new PositiveIntegerDocument());
+        textField.setDocument(new DigitsOnlyDocument());
         return textField;
     }
 
     /**
-     * Document that allows only positive integers to be entered into a text field.
+     * Document that allows only non-negative integers without leading zeros to be entered
+     * into a text field (e.g. "0", "11", "42" are valid; "007" is not).
      */
-    public static class PositiveIntegerDocument extends PlainDocument {
+    public static class DigitsOnlyDocument extends PlainDocument {
         /**
          * {@inheritDoc}
-         * Filters out any non-digit characters before inserting, ensuring only
-         * non-negative integers can be typed into the associated text field.
+         * Filters out non-digit characters and prevents a leading zero when the field
+         * already contains content or when the inserted string would cause one.
          */
         @Override
         public void insertString(int offs, String str, AttributeSet a) throws BadLocationException {
@@ -129,7 +134,12 @@ public class ResultEntryController {
             str.chars()
                     .filter(Character::isDigit)
                     .forEach(c -> sb.append((char) c));
-            super.insertString(offs, sb.toString(), a);
+            String filtered = sb.toString();
+            if (filtered.isEmpty()) return;
+            String current = getText(0, getLength());
+            String result = current.substring(0, offs) + filtered + current.substring(offs);
+            if (result.length() > 1 && result.startsWith("0")) return;
+            super.insertString(offs, filtered, a);
         }
     }
 }

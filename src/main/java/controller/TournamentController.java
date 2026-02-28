@@ -10,10 +10,8 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.*;
+import java.io.ObjectInputFilter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -211,6 +209,8 @@ public class TournamentController {
             File file = fileChooser.getSelectedFile();
 
             try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
+                in.setObjectInputFilter(ObjectInputFilter.Config.createFilter(
+                        "model.*;java.util.ArrayList;!*"));
                 TournamentState state = (TournamentState) in.readObject();
 
                 TournamentRound round = TournamentRound.fromSavedState(state);

@@ -33,7 +33,7 @@ tasks.withType<JavaCompile> {
 
 tasks.register<Jar>("createExecutableJar") {
     manifest {
-        attributes["Main-Class"] = "controller.TournamentSoftware"
+        attributes["Main-Class"] = "controller.TournamentController"
     }
 
     from(sourceSets.main.get().output) {

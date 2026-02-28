@@ -260,7 +260,7 @@ public class Player implements Serializable {
     }
 
     /**
-     * Two players are considered equal if they share the same first name, last name, and club.
+     * Two players are considered equal if they share the same first name, last name, club, and TTR value.
      *
      * @param o the object to compare with
      * @return {@code true} if the players are equal, {@code false} otherwise

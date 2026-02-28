@@ -2,27 +2,24 @@ package controller;
 
 import model.Match;
 import model.Player;
-import model.TournamentState;
-
 import model.TournamentMode;
+import model.TournamentState;
+import view.TournamentRoundView;
 import view.UITheme;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
-import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.print.PrinterException;
 import java.io.*;
 import java.util.*;
-import java.util.List;
 
 /**
- * UI controller for a tournament round. Delegates all pairing logic to {@link PairingEngine}
- * and score calculation to {@link ScoreCalculator}.
+ * Controller for a tournament round. Delegates all pairing logic to {@link PairingEngine},
+ * score calculation to {@link ScoreCalculator}, and all UI rendering to {@link TournamentRoundView}.
  */
-public class TournamentRound extends JFrame {
+public class TournamentRound {
 
     private final List<Player> playerList;
     private final int tableNumber;
@@ -31,14 +28,12 @@ public class TournamentRound extends JFrame {
 
     private final PairingEngine pairingEngine;
     private final ScoreCalculator scoreCalculator;
+    private final TournamentRoundView view;
 
-    private final JTable resultsTable;
-    private final JTextArea pairingsTextArea;
     private int currentRound;
-    private final JLabel currentRoundLabel;
 
     /**
-     * Constructs a new TournamentRound, sets up the UI, and generates the first round's pairings.
+     * Constructs a new TournamentRound, initializes the view, and generates the first round's pairings.
      *
      * @param playerList     the list of players participating in the tournament
      * @param tournamentName the name of the tournament
@@ -56,105 +51,58 @@ public class TournamentRound extends JFrame {
         this.mode = mode;
         this.tournamentName = tournamentName;
         this.currentRound = 1;
-        this.pairingsTextArea = new JTextArea(11, 20);
 
         this.pairingEngine = new PairingEngine(this.playerList, tableNumber, mode);
         this.scoreCalculator = new ScoreCalculator(pairingEngine.getAllMatches());
 
-        setTitle("Turnierrunde");
-        setSize(800, 680);
-        setLocationRelativeTo(null);
-        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
-        setLayout(new BorderLayout());
-        getContentPane().setBackground(UITheme.BACKGROUND);
+        this.view = new TournamentRoundView(tournamentName, mode);
 
-        addWindowListener(new WindowAdapter() {
-            public void windowClosing(WindowEvent windowEvent) {
-                if (JOptionPane.showConfirmDialog(TournamentRound.this,
+        view.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                if (JOptionPane.showConfirmDialog(view,
                         "Wollen Sie das Turnier wirklich beenden?", "Bestätigung",
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION) {
-                    dispose();
+                    view.dispose();
                 }
             }
         });
 
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(UITheme.PRIMARY);
-        headerPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
+        view.getPreviewRefereeSheetsButton().addActionListener(_ -> previewRefereeSheets());
 
-        JLabel titleLabel = new JLabel("Turnier: " + this.tournamentName);
-        titleLabel.setFont(UITheme.FONT_TITLE);
-        titleLabel.setForeground(Color.WHITE);
+        view.getResultEntryButton().addActionListener(_ -> {
+            new ResultEntryController(pairingEngine.getMatches(), this);
+            updateResultsTable();
+        });
 
-        currentRoundLabel = new JLabel("Runde " + currentRound);
-        currentRoundLabel.setFont(UITheme.FONT_SUBTITLE);
-        currentRoundLabel.setForeground(new Color(200, 220, 255));
+        view.getPrintTableButton().addActionListener(_ -> printPlacementTable());
+        view.getNextRoundButton().addActionListener(_ -> startNextRound());
 
-        JPanel headerTextPanel = new JPanel();
-        headerTextPanel.setLayout(new BoxLayout(headerTextPanel, BoxLayout.Y_AXIS));
-        headerTextPanel.setBackground(UITheme.PRIMARY);
-        headerTextPanel.add(titleLabel);
-        headerTextPanel.add(Box.createVerticalStrut(2));
-        headerTextPanel.add(currentRoundLabel);
-        headerPanel.add(headerTextPanel, BorderLayout.WEST);
-        add(headerPanel, BorderLayout.NORTH);
+        if (view.getManipulateButton() != null) {
+            view.getManipulateButton().addActionListener(_ -> {
+                boolean resultsEntered = pairingEngine.getMatches().stream()
+                        .anyMatch(match -> match.getSecondPlayer() != null && !match.getOverallResult().isEmpty());
 
-        JPanel centerCard = new JPanel(new BorderLayout(0, 0));
-        centerCard.setBackground(UITheme.BACKGROUND);
-        centerCard.setBorder(new EmptyBorder(10, 12, 4, 12));
-
-        JPanel pairingsInner = new JPanel(new BorderLayout());
-        pairingsInner.setBackground(UITheme.SURFACE);
-        pairingsInner.setBorder(UITheme.cardBorder("Aktuelle Begegnungen"));
-        pairingsTextArea.setEditable(false);
-        pairingsTextArea.setFont(UITheme.FONT_MONO);
-        pairingsTextArea.setMargin(new Insets(8, 10, 8, 10));
-        pairingsTextArea.setBackground(UITheme.SURFACE);
-        pairingsInner.add(new JScrollPane(pairingsTextArea), BorderLayout.CENTER);
-        centerCard.add(pairingsInner, BorderLayout.CENTER);
-        add(centerCard, BorderLayout.CENTER);
-
-        JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.setBackground(UITheme.BACKGROUND);
-        bottomPanel.add(getButtonsPanel(), BorderLayout.NORTH);
-
-        resultsTable = new JTable();
-        UITheme.applyTableStyling(resultsTable);
-        JScrollPane tableScrollPane = new JScrollPane(resultsTable);
-        tableScrollPane.setPreferredSize(new Dimension(500, 220));
-        tableScrollPane.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UITheme.BORDER_COLOR));
-
-        JPanel tableCard = new JPanel(new BorderLayout(0, 0));
-        tableCard.setBackground(UITheme.BACKGROUND);
-        tableCard.setBorder(new EmptyBorder(4, 12, 4, 12));
-
-        JPanel tableInner = new JPanel(new BorderLayout());
-        tableInner.setBackground(UITheme.SURFACE);
-        tableInner.setBorder(UITheme.cardBorder("Rangliste"));
-        tableInner.add(resultsTable.getTableHeader(), BorderLayout.NORTH);
-        tableInner.add(tableScrollPane, BorderLayout.CENTER);
-        tableCard.add(tableInner, BorderLayout.CENTER);
-        bottomPanel.add(tableCard, BorderLayout.CENTER);
-
-        JPanel bottomButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        bottomButtonPanel.setBackground(UITheme.BACKGROUND);
-        JButton printTableButton = UITheme.createSecondaryButton("Tabelle drucken");
-        printTableButton.addActionListener(_ -> printPlacementTable());
-        bottomButtonPanel.add(printTableButton);
-        JButton nextRoundButton = UITheme.createPrimaryButton("Nächste Runde auslosen und starten");
-        nextRoundButton.addActionListener(_ -> startNextRound());
-        bottomButtonPanel.add(nextRoundButton);
-
-        bottomPanel.add(bottomButtonPanel, BorderLayout.SOUTH);
-        add(bottomPanel, BorderLayout.SOUTH);
+                if (!resultsEntered) {
+                    List<Match> allPossibleOpenMatches = pairingEngine.calculateAllPossibleOpenMatches();
+                    allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
+                    Set<Match> uniqueMatches = new LinkedHashSet<>(allPossibleOpenMatches);
+                    new MatchManagerController(uniqueMatches, playerList.size(), this).getView().setVisible(true);
+                } else {
+                    JOptionPane.showMessageDialog(view,
+                            "Setzung kann nicht manipuliert werden, da bereits Ergebnisse eingetragen wurden.",
+                            "Ergebnisse vorhanden", JOptionPane.WARNING_MESSAGE);
+                }
+            });
+        }
 
         if (!skipInitialPairing) {
             String pairingsText = pairingEngine.generatePairings(currentRound);
             if (pairingsText != null) {
-                pairingsTextArea.setText(pairingsText);
+                view.getPairingsTextArea().setText(pairingsText);
             } else {
-                JOptionPane.showMessageDialog(this, "Es wurden bereits alle möglichen Kombinationen gespielt.",
+                JOptionPane.showMessageDialog(view, "Es wurden bereits alle möglichen Kombinationen gespielt.",
                         "Keine Paarungen mehr möglich", JOptionPane.INFORMATION_MESSAGE);
             }
         }
@@ -162,58 +110,12 @@ public class TournamentRound extends JFrame {
     }
 
     /**
-     * Builds and returns the action button panel displayed above the standings table.
-     * Contains buttons for viewing referee sheets, entering results, and (in Swiss mode)
-     * manipulating the pairings.
+     * Makes the tournament round window visible or invisible.
      *
-     * @return the configured button panel
+     * @param visible {@code true} to show the window
      */
-    private JPanel getButtonsPanel() {
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
-        bottomPanel.setBackground(UITheme.BACKGROUND);
-
-        JButton previewRefereeSheetsButton = UITheme.createSecondaryButton("Schiedsrichterzettel anzeigen");
-        previewRefereeSheetsButton.addActionListener(_ -> previewRefereeSheets());
-        bottomPanel.add(previewRefereeSheetsButton);
-
-        JButton resultEntryButton = UITheme.createPrimaryButton("Ergebnisse erfassen");
-        resultEntryButton.addActionListener(_ -> {
-            new ResultEntryController(pairingEngine.getMatches(), this);
-            updateResultsTable();
-        });
-        bottomPanel.add(resultEntryButton);
-
-        if (mode == TournamentMode.SWISS) {
-            bottomPanel.add(getManipulateButton());
-        }
-        return bottomPanel;
-    }
-
-    /**
-     * Creates the "Setzung manipulieren" button, which opens the {@link MatchManagerController}
-     * to allow manual override of the current round's pairings. The button is disabled
-     * (shows a warning) if any results have already been entered for the current round.
-     *
-     * @return the configured manipulate button
-     */
-    private JButton getManipulateButton() {
-        JButton manipulateSettingButton = UITheme.createSecondaryButton("Setzung manipulieren");
-        manipulateSettingButton.addActionListener(_ -> {
-            boolean resultsEntered = pairingEngine.getMatches().stream()
-                    .anyMatch(match -> match.getSecondPlayer() != null && !match.getOverallResult().isEmpty());
-
-            if (!resultsEntered) {
-                List<Match> allPossibleOpenMatches = pairingEngine.calculateAllPossibleOpenMatches();
-                allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
-                Set<Match> uniqueMatches = new LinkedHashSet<>(allPossibleOpenMatches);
-                new MatchManagerController(uniqueMatches, playerList.size(), this).getView().setVisible(true);
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "Setzung kann nicht manipuliert werden, da bereits Ergebnisse eingetragen wurden.",
-                        "Ergebnisse vorhanden", JOptionPane.WARNING_MESSAGE);
-            }
-        });
-        return manipulateSettingButton;
+    public void setVisible(boolean visible) {
+        view.setVisible(visible);
     }
 
     /**
@@ -224,12 +126,12 @@ public class TournamentRound extends JFrame {
         scoreCalculator.calculate(playerList);
 
         DefaultTableModel tableModel = getDefaultTableModel(playerList);
-        resultsTable.setModel(tableModel);
-        UITheme.applyTableStyling(resultsTable);
-        UITheme.setNameColumnWide(resultsTable, 1);
+        view.getResultsTable().setModel(tableModel);
+        UITheme.applyTableStyling(view.getResultsTable());
+        UITheme.setNameColumnWide(view.getResultsTable(), 1);
 
-        validate();
-        repaint();
+        view.validate();
+        view.repaint();
     }
 
     /**
@@ -330,7 +232,7 @@ public class TournamentRound extends JFrame {
                 .anyMatch(match -> match.getSecondPlayer() != null
                         && (match.getOverallResult().isEmpty() || match.getOverallResult().equals(":")));
         if (unfinished) {
-            JOptionPane.showMessageDialog(this,
+            JOptionPane.showMessageDialog(view,
                     "Es gibt noch unbeendete Begegnungen. Bitte alle Ergebnisse erfassen, bevor die nächste Runde gestartet werden kann.",
                     "Unbeendete Begegnungen", JOptionPane.WARNING_MESSAGE);
             return;
@@ -341,21 +243,20 @@ public class TournamentRound extends JFrame {
 
         if (pairingsText != null) {
             currentRound++;
-            currentRoundLabel.setText("Runde " + currentRound);
-            pairingsTextArea.setText(pairingsText);
+            view.getCurrentRoundLabel().setText("Runde " + currentRound);
+            view.getPairingsTextArea().setText(pairingsText);
         } else {
-            pairingsTextArea.setText("");
+            view.getPairingsTextArea().setText("");
         }
 
         saveTournamentState();
 
         if (pairingsText == null) {
-            JOptionPane.showMessageDialog(this, "Es wurden bereits alle möglichen Kombinationen gespielt.",
+            JOptionPane.showMessageDialog(view, "Es wurden bereits alle möglichen Kombinationen gespielt.",
                     "Keine Paarungen mehr möglich", JOptionPane.INFORMATION_MESSAGE);
         }
 
         updateResultsTable();
-
     }
 
     /**
@@ -366,7 +267,7 @@ public class TournamentRound extends JFrame {
      */
     public void setNewMatches(List<Match> selectedMatches) {
         String text = pairingEngine.setNewMatches(selectedMatches);
-        pairingsTextArea.setText(text);
+        view.getPairingsTextArea().setText(text);
         updateResultsTable();
     }
 
@@ -376,7 +277,7 @@ public class TournamentRound extends JFrame {
      */
     private void printPlacementTable() {
         try {
-            resultsTable.print(
+            view.getResultsTable().print(
                 JTable.PrintMode.FIT_WIDTH,
                 new java.text.MessageFormat("Turnier: " + tournamentName + "  —  Runde " + currentRound),
                 new java.text.MessageFormat("Seite {0}"),
@@ -385,7 +286,7 @@ public class TournamentRound extends JFrame {
                 true
             );
         } catch (PrinterException e) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Drucken.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(view, "Fehler beim Drucken.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -413,7 +314,7 @@ public class TournamentRound extends JFrame {
         try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))) {
             out.writeObject(state);
         } catch (IOException _) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Speichern.", "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(view, "Fehler beim Speichern.", "Fehler", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -431,10 +332,10 @@ public class TournamentRound extends JFrame {
                 true
         );
         round.currentRound = state.currentRound();
-        round.currentRoundLabel.setText("Runde " + state.currentRound());
+        round.view.getCurrentRoundLabel().setText("Runde " + state.currentRound());
         round.pairingEngine.restoreState(state.allMatches(), state.matches());
         round.pairingEngine.setFinished(state.finished());
-        round.pairingsTextArea.setText(round.pairingEngine.formatMatchesAsText(state.matches()));
+        round.view.getPairingsTextArea().setText(round.pairingEngine.formatMatchesAsText(state.matches()));
         round.updateResultsTable();
         return round;
     }
@@ -447,5 +348,4 @@ public class TournamentRound extends JFrame {
     public List<Match> getMatches() {
         return pairingEngine.getMatches();
     }
-
 }
