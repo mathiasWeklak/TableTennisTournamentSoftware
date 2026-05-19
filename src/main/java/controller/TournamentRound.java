@@ -11,7 +11,10 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.print.PageFormat;
+import java.awt.print.Paper;
 import java.awt.print.PrinterException;
+import java.awt.print.PrinterJob;
 import java.io.*;
 import java.util.*;
 
@@ -277,14 +280,29 @@ public class TournamentRound {
      */
     private void printPlacementTable() {
         try {
-            view.getResultsTable().print(
-                JTable.PrintMode.FIT_WIDTH,
-                new java.text.MessageFormat("Turnier: " + tournamentName + "  —  Runde " + currentRound),
-                new java.text.MessageFormat("Seite {0}"),
-                true,
-                null,
-                true
+            PrinterJob job = PrinterJob.getPrinterJob();
+            job.setJobName("Rangliste - " + tournamentName);
+
+            PageFormat pageFormat = job.defaultPage();
+            pageFormat.setOrientation(PageFormat.LANDSCAPE);
+            Paper paper = pageFormat.getPaper();
+            double margin = 36;
+            paper.setImageableArea(margin, margin,
+                    paper.getWidth() - margin * 2,
+                    paper.getHeight() - margin * 2);
+            pageFormat.setPaper(paper);
+            PageFormat validated = job.validatePage(pageFormat);
+
+            java.awt.print.Printable printable = view.getResultsTable().getPrintable(
+                    JTable.PrintMode.FIT_WIDTH,
+                    new java.text.MessageFormat("Turnier: " + tournamentName + "  —  Runde " + currentRound),
+                    new java.text.MessageFormat("Seite {0}")
             );
+            job.setPrintable(printable, validated);
+
+            if (job.printDialog()) {
+                job.print();
+            }
         } catch (PrinterException e) {
             JOptionPane.showMessageDialog(view, "Fehler beim Drucken.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
         }

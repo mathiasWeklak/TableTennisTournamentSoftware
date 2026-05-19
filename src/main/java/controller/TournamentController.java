@@ -210,7 +210,9 @@ public class TournamentController {
 
             try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
                 in.setObjectInputFilter(ObjectInputFilter.Config.createFilter(
-                        "model.*;java.util.ArrayList;!*"));
+                        "java.lang.Object;java.lang.String;java.lang.Number;"
+                                + "java.lang.Integer;java.lang.Boolean;java.lang.Enum;"
+                                + "java.util.ArrayList;model.**;!*"));
                 TournamentState state = (TournamentState) in.readObject();
 
                 TournamentRound round = TournamentRound.fromSavedState(state);
