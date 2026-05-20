@@ -121,7 +121,7 @@ public class PairingEngine {
         if (mode == TournamentMode.ROUND_ROBIN) {
             return generatePairingsRoundRobin(availableTables, currentRound);
         } else {
-            return generatePairingsSwissSystem(new ArrayList<>(playerList), availableTables);
+            return generatePairingsSwissSystem(new ArrayList<>(playerList), availableTables, currentRound);
         }
     }
 
@@ -134,7 +134,7 @@ public class PairingEngine {
      * @param availableTables the pool of table numbers to assign
      * @return formatted pairing text, or {@code null} if no valid pairings exist
      */
-    private String generatePairingsSwissSystem(List<Player> sortedList, List<Integer> availableTables) {
+    private String generatePairingsSwissSystem(List<Player> sortedList, List<Integer> availableTables, int currentRound) {
         sortPlayersByRanking(sortedList, mode);
         Player byePlayer = null;
 
@@ -151,10 +151,14 @@ public class PairingEngine {
                 .collect(Collectors.toSet());
 
         List<Player> orderedPlayers = new ArrayList<>(sortedList);
-        Collections.reverse(orderedPlayers);
+        if (currentRound == 1) {
+            orderedPlayers.sort(Comparator.comparingInt(Player::getTtr).reversed());
+        } else {
+            Collections.reverse(orderedPlayers);
+        }
 
         List<Match> swissPairings = new ArrayList<>();
-        if (backtrackSwissPairing(orderedPlayers, new HashSet<>(), swissPairings, playedPairs)) {
+        if (backtrackSwissPairing(orderedPlayers, new HashSet<>(), swissPairings, playedPairs, currentRound)) {
             for (Match match : swissPairings) {
                 if (availableTables.isEmpty()) {
                     availableTables = IntStream.rangeClosed(1, tableNumber).boxed().collect(Collectors.toList());
@@ -185,20 +189,20 @@ public class PairingEngine {
      * @return {@code true} if a complete valid pairing was found, {@code false} otherwise
      */
     private boolean backtrackSwissPairing(List<Player> players, Set<Player> paired, List<Match> result,
-                                           Set<String> playedPairs) {
+                                           Set<String> playedPairs, int currentRound) {
         Player current = players.stream()
                 .filter(p -> !paired.contains(p))
                 .findFirst()
                 .orElse(null);
         if (current == null) return true;
 
-        for (Player opponent : getSwissOrderedOpponents(current, players, paired, playedPairs)) {
+        for (Player opponent : getSwissOrderedOpponents(current, players, paired, playedPairs, currentRound)) {
             paired.add(current);
             paired.add(opponent);
 
             if (canBeFullyMatched(players, paired, playedPairs)) {
                 result.add(new Match(current, opponent, -1));
-                if (backtrackSwissPairing(players, paired, result, playedPairs)) {
+                if (backtrackSwissPairing(players, paired, result, playedPairs, currentRound)) {
                     return true;
                 }
                 result.removeLast();
@@ -222,11 +226,37 @@ public class PairingEngine {
      * @return ordered list of eligible opponents
      */
     private List<Player> getSwissOrderedOpponents(Player player, List<Player> players, Set<Player> paired,
-                                                   Set<String> playedPairs) {
-        return players.stream()
+                                                   Set<String> playedPairs, int currentRound) {
+        List<Player> remaining = players.stream()
                 .filter(p -> !paired.contains(p) && !p.equals(player)
                         && !playedPairs.contains(createCanonicalPairing(player, p)))
-                .sorted(Comparator.comparingInt((Player p) -> Math.abs(p.getPoints() - player.getPoints()))
+                .toList();
+
+        if (currentRound == 1) {
+            List<Player> unpaired = players.stream()
+                    .filter(p -> !paired.contains(p))
+                    .toList();
+            int groupSize = unpaired.size();
+            int targetOriginalIdx = groupSize / 2;
+            return remaining.stream()
+                    .sorted(Comparator
+                            .comparingInt((Player p) -> Math.abs(unpaired.indexOf(p) - targetOriginalIdx))
+                            .thenComparing(Comparator.comparingInt(Player::getTtr).reversed()))
+                    .toList();
+        }
+
+        List<Player> sameGroupUnpaired = players.stream()
+                .filter(p -> !paired.contains(p) && p.getPoints() == player.getPoints())
+                .toList();
+        int groupSize = sameGroupUnpaired.size();
+        int targetOriginalIdx = groupSize - 1;
+        return remaining.stream()
+                .sorted(Comparator
+                        .comparingInt((Player p) -> Math.abs(p.getPoints() - player.getPoints()))
+                        .thenComparingInt(p -> {
+                            if (p.getPoints() != player.getPoints()) return 0;
+                            return Math.abs(sameGroupUnpaired.indexOf(p) - targetOriginalIdx);
+                        })
                         .thenComparing(Comparator.comparingInt(Player::getTtr).reversed()))
                 .toList();
     }

@@ -528,4 +528,112 @@ public class PairingEngineTest {
         assertTrue(text.contains("Freilos"));
         assertFalse(text.contains("vs."));
     }
+
+    private static Match findMatchFor(List<Match> matches, Player p) {
+        return matches.stream()
+                .filter(m -> p.equals(m.getFirstPlayer()) || p.equals(m.getSecondPlayer()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static Player opponentOf(Match m, Player p) {
+        return p.equals(m.getFirstPlayer()) ? m.getSecondPlayer() : m.getFirstPlayer();
+    }
+
+    @Test
+    public void testSwissRound1_eightPlayers_strongestPairedWithStrongestOfLowerHalf() {
+        Player s1 = new Player("S1", "X", "C", 2000);
+        Player s2 = new Player("S2", "X", "C", 1900);
+        Player s3 = new Player("S3", "X", "C", 1800);
+        Player s4 = new Player("S4", "X", "C", 1700);
+        Player s5 = new Player("S5", "X", "C", 1600);
+        Player s6 = new Player("S6", "X", "C", 1500);
+        Player s7 = new Player("S7", "X", "C", 1400);
+        Player s8 = new Player("S8", "X", "C", 1300);
+        PairingEngine engine = new PairingEngine(
+                List.of(s1, s2, s3, s4, s5, s6, s7, s8), 4, TournamentMode.SWISS);
+        engine.generatePairings(1);
+        List<Match> matches = engine.getMatches();
+
+        assertEquals(s5, opponentOf(findMatchFor(matches, s1), s1));
+        assertEquals(s6, opponentOf(findMatchFor(matches, s2), s2));
+        assertEquals(s7, opponentOf(findMatchFor(matches, s3), s3));
+        assertEquals(s8, opponentOf(findMatchFor(matches, s4), s4));
+    }
+
+    @Test
+    public void testSwissRound1_oddPlayers_weakestGetsBye_thenFoldPairing() {
+        Player s1 = new Player("S1", "X", "C", 2000);
+        Player s2 = new Player("S2", "X", "C", 1900);
+        Player s3 = new Player("S3", "X", "C", 1800);
+        Player s4 = new Player("S4", "X", "C", 1700);
+        Player s5 = new Player("S5", "X", "C", 1600);
+        Player s6 = new Player("S6", "X", "C", 1500);
+        Player s7 = new Player("S7", "X", "C", 1400);
+        PairingEngine engine = new PairingEngine(
+                List.of(s1, s2, s3, s4, s5, s6, s7), 3, TournamentMode.SWISS);
+        engine.generatePairings(1);
+        List<Match> matches = engine.getMatches();
+
+        Match byeMatch = matches.stream()
+                .filter(m -> m.getSecondPlayer() == null)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(s7, byeMatch.getFirstPlayer());
+
+        assertEquals(s4, opponentOf(findMatchFor(matches, s1), s1));
+        assertEquals(s5, opponentOf(findMatchFor(matches, s2), s2));
+        assertEquals(s6, opponentOf(findMatchFor(matches, s3), s3));
+    }
+
+    @Test
+    public void testSwissRound2_outerPairingInsideScoreGroups() {
+        Player s1 = new Player("S1", "X", "C", 2000);
+        Player s2 = new Player("S2", "X", "C", 1900);
+        Player s3 = new Player("S3", "X", "C", 1800);
+        Player s4 = new Player("S4", "X", "C", 1700);
+        Player s5 = new Player("S5", "X", "C", 1600);
+        Player s6 = new Player("S6", "X", "C", 1500);
+        Player s7 = new Player("S7", "X", "C", 1400);
+        Player s8 = new Player("S8", "X", "C", 1300);
+        PairingEngine engine = new PairingEngine(
+                List.of(s1, s2, s3, s4, s5, s6, s7, s8), 4, TournamentMode.SWISS);
+
+        engine.generatePairings(1);
+        s1.setPoints(1); s2.setPoints(1); s3.setPoints(1); s4.setPoints(1);
+        s5.setPoints(0); s6.setPoints(0); s7.setPoints(0); s8.setPoints(0);
+        engine.clearCurrentRound();
+        engine.generatePairings(2);
+        List<Match> matches = engine.getMatches();
+
+        assertEquals(s4, opponentOf(findMatchFor(matches, s1), s1));
+        assertEquals(s3, opponentOf(findMatchFor(matches, s2), s2));
+        assertEquals(s8, opponentOf(findMatchFor(matches, s5), s5));
+        assertEquals(s7, opponentOf(findMatchFor(matches, s6), s6));
+    }
+
+    @Test
+    public void testSwissRound2_eightWinners_eachPlaysOuterPair() {
+        List<Player> players = new ArrayList<>();
+        for (int i = 1; i <= 16; i++) {
+            players.add(new Player("P" + i, "X", "C", 2100 - i * 10));
+        }
+        PairingEngine engine = new PairingEngine(players, 8, TournamentMode.SWISS);
+        engine.generatePairings(1);
+        for (int i = 0; i < 8; i++) players.get(i).setPoints(1);
+        for (int i = 8; i < 16; i++) players.get(i).setPoints(0);
+        engine.clearCurrentRound();
+        engine.generatePairings(2);
+        List<Match> matches = engine.getMatches();
+
+        assertEquals(players.get(7), opponentOf(findMatchFor(matches, players.get(0)), players.get(0)));
+        assertEquals(players.get(6), opponentOf(findMatchFor(matches, players.get(1)), players.get(1)));
+        assertEquals(players.get(5), opponentOf(findMatchFor(matches, players.get(2)), players.get(2)));
+        assertEquals(players.get(4), opponentOf(findMatchFor(matches, players.get(3)), players.get(3)));
+
+        assertEquals(players.get(15), opponentOf(findMatchFor(matches, players.get(8)), players.get(8)));
+        assertEquals(players.get(14), opponentOf(findMatchFor(matches, players.get(9)), players.get(9)));
+        assertEquals(players.get(13), opponentOf(findMatchFor(matches, players.get(10)), players.get(10)));
+        assertEquals(players.get(12), opponentOf(findMatchFor(matches, players.get(11)), players.get(11)));
+    }
 }
