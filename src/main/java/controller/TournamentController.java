@@ -210,17 +210,17 @@ public class TournamentController {
 
             try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
                 in.setObjectInputFilter(ObjectInputFilter.Config.createFilter(
-                        "java.lang.Object;java.lang.String;java.lang.Number;"
-                                + "java.lang.Integer;java.lang.Boolean;java.lang.Enum;"
-                                + "java.util.ArrayList;model.**;!*"));
+                        "java.lang.**;java.util.**;model.**;!*"));
                 TournamentState state = (TournamentState) in.readObject();
 
                 TournamentRound round = TournamentRound.fromSavedState(state);
                 round.setVisible(true);
                 view.dispose();
 
-            } catch (IOException | ClassNotFoundException _) {
-                JOptionPane.showMessageDialog(view, "Fehler beim Laden der Datei.", "Fehler", JOptionPane.ERROR_MESSAGE);
+            } catch (IOException | ClassNotFoundException e) {
+                JOptionPane.showMessageDialog(view,
+                        "Fehler beim Laden der Datei.\n\nDetails: " + e.getClass().getSimpleName() + ": " + e.getMessage(),
+                        "Fehler", JOptionPane.ERROR_MESSAGE);
             }
         }
     }

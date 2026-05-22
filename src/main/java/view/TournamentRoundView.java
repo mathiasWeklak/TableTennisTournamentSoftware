@@ -21,6 +21,7 @@ public class TournamentRoundView extends JFrame {
     private final JButton resultEntryButton;
     private final JButton manipulateButton;
     private final JButton printTableButton;
+    private final JButton crossTableButton;
     private final JButton nextRoundButton;
 
     /**
@@ -119,6 +120,9 @@ public class TournamentRoundView extends JFrame {
         printTableButton = UITheme.createSecondaryButton("Tabelle drucken");
         bottomButtonPanel.add(printTableButton);
 
+        crossTableButton = UITheme.createSecondaryButton("Kreuztabelle");
+        bottomButtonPanel.add(crossTableButton);
+
         nextRoundButton = UITheme.createPrimaryButton("Nächste Runde auslosen und starten");
         bottomButtonPanel.add(nextRoundButton);
 
@@ -187,6 +191,15 @@ public class TournamentRoundView extends JFrame {
      */
     public JButton getPrintTableButton() {
         return printTableButton;
+    }
+
+    /**
+     * Returns the button that opens the cross table view.
+     *
+     * @return the cross table button
+     */
+    public JButton getCrossTableButton() {
+        return crossTableButton;
     }
 
     /**

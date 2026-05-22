@@ -80,6 +80,7 @@ public class TournamentRound {
         });
 
         view.getPrintTableButton().addActionListener(_ -> printPlacementTable());
+        view.getCrossTableButton().addActionListener(_ -> showCrossTable());
         view.getNextRoundButton().addActionListener(_ -> startNextRound());
 
         if (view.getManipulateButton() != null) {
@@ -275,6 +276,16 @@ public class TournamentRound {
     }
 
     /**
+     * Opens the cross table window for the current tournament state.
+     */
+    private void showCrossTable() {
+        List<Player> sorted = new ArrayList<>(playerList);
+        sortPlayers(sorted);
+        sorted = sorted.reversed();
+        new CrossTableController(sorted, pairingEngine.getAllMatches(), tournamentName, mode);
+    }
+
+    /**
      * Sends the current standings table to the printer using the system print dialog.
      * Shows an error dialog if printing fails.
      */
@@ -319,8 +330,8 @@ public class TournamentRound {
         File file = new File(new File(System.getProperty("user.home"), "Documents"), fileName);
 
         TournamentState state = new TournamentState(
-                playerList,
-                pairingEngine.getAllMatches(),
+                new ArrayList<>(playerList),
+                new ArrayList<>(pairingEngine.getAllMatches()),
                 new ArrayList<>(pairingEngine.getMatches()),
                 currentRound,
                 pairingEngine.isFinished(),
