@@ -156,12 +156,48 @@ public final class UITheme {
 
         JTableHeader header = table.getTableHeader();
         header.setFont(FONT_SUBTITLE);
-        header.setBackground(HEADER_BG);
+        // the area right of the last column stays neutral; only the header cells are blue
+        header.setBackground(SURFACE);
         header.setForeground(HEADER_FG);
         header.setPreferredSize(new Dimension(header.getWidth(), 34));
         header.setReorderingAllowed(false);
+        header.setDefaultRenderer(new HeaderRenderer());
 
+        table.setFillsViewportHeight(true); // no grey area below the last row
         table.setDefaultRenderer(Object.class, new AlternatingRowRenderer());
+    }
+
+    /**
+     * Sets a neutral background for the visible area of a table's scroll pane, so the space next
+     * to or below a narrow table is not grey.
+     *
+     * @param scrollPane the scroll pane containing a table
+     * @return the same scroll pane
+     */
+    public static JScrollPane neutralViewport(JScrollPane scrollPane) {
+        scrollPane.getViewport().setBackground(SURFACE);
+        return scrollPane;
+    }
+
+    /**
+     * Header renderer that paints every header cell in the header colour with white bold text,
+     * independent of the look and feel (Nimbus would paint grey cells).
+     */
+    public static class HeaderRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                boolean isSelected, boolean hasFocus, int row, int column) {
+            super.getTableCellRendererComponent(table, value, false, false, row, column);
+            setOpaque(true);
+            setBackground(HEADER_BG);
+            setForeground(HEADER_FG);
+            setFont(table.getTableHeader().getFont());
+            setHorizontalAlignment(SwingConstants.LEFT);
+            setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(70, 110, 180)),
+                    BorderFactory.createEmptyBorder(0, 8, 0, 8)));
+            return this;
+        }
     }
 
     /**
@@ -172,7 +208,8 @@ public final class UITheme {
      * @param nameColumnIndex the zero-based column index of the name column (will not be resized)
      */
     public static void setNameColumnWide(JTable table, int nameColumnIndex) {
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        // all other columns have a fixed width, so the name column takes up the remaining width
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         int nameContentWidth = 0;
         for (int col = 0; col < table.getColumnCount(); col++) {
             int width = 0;
@@ -194,8 +231,9 @@ public final class UITheme {
                 nameContentWidth = width + 12;
             } else {
                 int finalWidth = width + 12;
+                table.getColumnModel().getColumn(col).setMinWidth(finalWidth);
+                table.getColumnModel().getColumn(col).setMaxWidth(finalWidth);
                 table.getColumnModel().getColumn(col).setPreferredWidth(finalWidth);
-                table.getColumnModel().getColumn(col).setMaxWidth(finalWidth + 20);
             }
         }
         if (nameContentWidth > 0) {

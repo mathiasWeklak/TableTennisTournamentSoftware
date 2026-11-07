@@ -103,7 +103,7 @@ public class RefereeSheetsController {
 
     /**
      * Creates a read-only {@link DefaultTableModel} for the given match's referee sheet.
-     * The model contains a header row with player names and rows for each set plus the total.
+     * The column headers carry the player names; the rows are the five sets plus the total.
      *
      * @param match the match to create the sheet for
      * @return the table model for the referee sheet
@@ -111,13 +111,12 @@ public class RefereeSheetsController {
     public DefaultTableModel createRefereeSheetTableModel(Match match) {
         String[] columnNames = {"", match.getFirstPlayer().getFullName(), match.getSecondPlayer().getFullName()};
         Object[][] data = {
-                {"Spieler", match.getFirstPlayer().getFullName(), match.getSecondPlayer().getFullName()},
                 {"Satz 1", "", ""},
                 {"Satz 2", "", ""},
                 {"Satz 3", "", ""},
                 {"Satz 4", "", ""},
                 {"Satz 5", "", ""},
-                {"Gesamtergebnis", "", ""}
+                {"Gesamt", "", ""}
         };
         return new DefaultTableModel(data, columnNames) {
             @Override

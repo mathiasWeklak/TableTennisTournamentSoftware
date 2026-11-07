@@ -52,7 +52,7 @@ public class CrossTableView extends JDialog {
         JPanel tableCard = new JPanel(new BorderLayout());
         tableCard.setBackground(UITheme.SURFACE);
         tableCard.setBorder(UITheme.cardBorder("Kreuztabelle"));
-        tableCard.add(new JScrollPane(crossTable), BorderLayout.CENTER);
+        tableCard.add(UITheme.neutralViewport(new JScrollPane(crossTable)), BorderLayout.CENTER);
         contentPane.add(tableCard, BorderLayout.CENTER);
 
         JButton printButton = UITheme.createPrimaryButton("Kreuztabelle drucken");
@@ -102,13 +102,17 @@ public class CrossTableView extends JDialog {
         Font font = compact ? UITheme.FONT_BODY.deriveFont(9f) : UITheme.FONT_BODY;
         table.setRowHeight(compact ? 16 : 26);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        if (compact) {
+            // the screen spacing (10 px) would leave no room for "3:1" in the narrow print columns
+            table.setIntercellSpacing(new Dimension(1, 1));
+        }
         table.getTableHeader().setFont(compact ? font.deriveFont(Font.BOLD) : table.getTableHeader().getFont());
 
         table.getColumnModel().getColumn(0).setPreferredWidth(compact ? 120 : 200);
         table.getColumnModel().getColumn(0).setMinWidth(compact ? 80 : 160);
         for (int col = 1; col <= playerCount; col++) {
-            table.getColumnModel().getColumn(col).setPreferredWidth(compact ? 30 : 50);
-            table.getColumnModel().getColumn(col).setMinWidth(compact ? 26 : 40);
+            table.getColumnModel().getColumn(col).setPreferredWidth(compact ? 32 : 50);
+            table.getColumnModel().getColumn(col).setMinWidth(compact ? 32 : 40);
         }
 
         table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {

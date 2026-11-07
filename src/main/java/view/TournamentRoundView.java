@@ -109,7 +109,7 @@ public class TournamentRoundView extends JFrame {
         // --- standings -------------------------------------------------------------------------
         resultsTable = new JTable();
         UITheme.applyTableStyling(resultsTable);
-        JScrollPane tableScrollPane = new JScrollPane(resultsTable);
+        JScrollPane tableScrollPane = UITheme.neutralViewport(new JScrollPane(resultsTable));
         tableScrollPane.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UITheme.BORDER_COLOR));
 
         JPanel tableInner = new JPanel(new BorderLayout());

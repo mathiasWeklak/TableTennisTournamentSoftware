@@ -30,7 +30,8 @@ import java.util.stream.IntStream;
  */
 public class ResultEntryView extends JDialog {
 
-    private static final String DONE_MARK = "✓ ";
+    /** Drawn check mark: a font-independent replacement for "✓", which many fonts lack. */
+    static final Icon DONE_ICON = new CheckIcon(14);
 
     private final JTabbedPane tabbedPane;
     private final ResultEntryController controller;
@@ -179,8 +180,45 @@ public class ResultEntryView extends JDialog {
     public void markTab(JPanel matchPanel, boolean complete) {
         int index = tabbedPane.indexOfComponent(matchPanel);
         if (index < 0) return;
-        String base = (String) matchPanel.getClientProperty("baseTitle");
-        tabbedPane.setTitleAt(index, complete ? DONE_MARK + base : base);
+        tabbedPane.setIconAt(index, complete ? DONE_ICON : null);
+    }
+
+    /**
+     * A green circle with a white check mark, drawn with Java2D.
+     */
+    static final class CheckIcon implements Icon {
+        private final int size;
+
+        CheckIcon(int size) {
+            this.size = size;
+        }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(UITheme.SUCCESS);
+                g2.fillOval(x, y, size, size);
+                g2.setColor(Color.WHITE);
+                g2.setStroke(new BasicStroke(size / 7f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                int[] xs = {x + size * 27 / 100, x + size * 44 / 100, x + size * 74 / 100};
+                int[] ys = {y + size * 52 / 100, y + size * 69 / 100, y + size * 33 / 100};
+                g2.drawPolyline(xs, ys, 3);
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        @Override
+        public int getIconWidth() {
+            return size;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return size;
+        }
     }
 
     /**

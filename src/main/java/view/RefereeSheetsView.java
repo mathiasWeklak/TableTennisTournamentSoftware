@@ -83,7 +83,7 @@ public class RefereeSheetsView extends JDialog {
             configureTable(table);
 
             tableCard.add(table.getTableHeader(), BorderLayout.NORTH);
-            tableCard.add(new JScrollPane(table), BorderLayout.CENTER);
+            tableCard.add(UITheme.neutralViewport(new JScrollPane(table)), BorderLayout.CENTER);
 
             matchPanel.add(tableCard, BorderLayout.CENTER);
             tabbedPane.addTab(sheetLabel, matchPanel);
@@ -114,11 +114,7 @@ public class RefereeSheetsView extends JDialog {
                 super.getTableCellRendererComponent(t, value, isSelected, hasFocus, row, column);
                 setFont(UITheme.FONT_BODY);
                 if (!isSelected) {
-                    if (row == 0) {
-                        setBackground(new Color(232, 240, 254));
-                        setForeground(UITheme.PRIMARY);
-                        setFont(UITheme.FONT_SUBTITLE);
-                    } else if (row == 6) {
+                    if (row == t.getRowCount() - 1) { // total row
                         setBackground(new Color(232, 245, 233));
                         setForeground(UITheme.SUCCESS);
                         setFont(UITheme.FONT_BODY.deriveFont(Font.BOLD));
