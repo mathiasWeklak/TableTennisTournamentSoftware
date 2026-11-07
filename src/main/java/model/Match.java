@@ -17,6 +17,10 @@ public class Match implements Serializable {
     private int tableNumber;
     private final Result result;
     private String overallResult;
+    // Pairing information, needed for the float history. 0 in files saved by older versions.
+    private int round;
+    private int firstPointsBefore;
+    private int secondPointsBefore;
 
     /**
      * Constructs a match between two players at a specific table.
@@ -107,6 +111,86 @@ public class Match implements Serializable {
         this.tableNumber = tableNumber;
     }
 
+    /**
+     * Returns {@code true} if the match has a decided result that counts. This is the single rule
+     * used by the standings, the cross table, the pairing status and the round check:
+     * if any set was entered, the sets must form a complete, valid match
+     * ({@link ResultRules#isComplete}); without set entries a decided overall result ("3:1") counts.
+     * A bye is never "decided" in this sense.
+     *
+     * @return {@code true} if the result counts
+     */
+    public boolean isDecided() {
+        if (secondPlayer == null) return false;
+        String[][] sets = getResults();
+        boolean anySetEntered = Arrays.stream(sets)
+                .anyMatch(row -> row != null && ResultRules.checkSet(row[0], row[1]) != ResultRules.SetStatus.EMPTY);
+        return anySetEntered ? ResultRules.isComplete(sets) : ResultRules.isDecidedOverallResult(overallResult);
+    }
+
+    /**
+     * Returns the sets won by both players if the match is decided.
+     *
+     * @return {@code int[]{setsFirstPlayer, setsSecondPlayer}}, or {@code null} if not decided
+     */
+    public int[] decidedSets() {
+        if (!isDecided()) return null;
+        String[][] sets = getResults();
+        boolean anySetEntered = Arrays.stream(sets)
+                .anyMatch(row -> row != null && ResultRules.checkSet(row[0], row[1]) != ResultRules.SetStatus.EMPTY);
+        return anySetEntered ? ResultRules.countSets(sets) : ResultRules.parseOverallResult(overallResult);
+    }
+
+    /**
+     * Records in which round the match was paired and the players' points at pairing time.
+     *
+     * @param round        the round number (1-based)
+     * @param firstPoints  points of the first player before the round
+     * @param secondPoints points of the second player before the round (ignored for a bye)
+     */
+    public void setPairingInfo(int round, int firstPoints, int secondPoints) {
+        this.round = round;
+        this.firstPointsBefore = firstPoints;
+        this.secondPointsBefore = secondPoints;
+    }
+
+    /**
+     * Returns the round in which the match was paired.
+     *
+     * @return the round number, or 0 if unknown (files saved by older versions)
+     */
+    public int getRound() {
+        return round;
+    }
+
+    /**
+     * Returns {@code true} if {@code player} floated down in this match: they had a bye, or they
+     * played an opponent who had fewer points before the round.
+     *
+     * @param player a player
+     * @return {@code true} for a downfloat
+     */
+    public boolean isDownfloatFor(Player player) {
+        if (secondPlayer == null) return firstPlayer.equals(player);
+        if (firstPlayer.equals(player)) return firstPointsBefore > secondPointsBefore;
+        if (secondPlayer.equals(player)) return secondPointsBefore > firstPointsBefore;
+        return false;
+    }
+
+    /**
+     * Returns {@code true} if {@code player} floated up in this match: they played an opponent
+     * who had more points before the round.
+     *
+     * @param player a player
+     * @return {@code true} for an upfloat
+     */
+    public boolean isUpfloatFor(Player player) {
+        if (secondPlayer == null) return false;
+        if (firstPlayer.equals(player)) return firstPointsBefore < secondPointsBefore;
+        if (secondPlayer.equals(player)) return secondPointsBefore < firstPointsBefore;
+        return false;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -161,7 +245,7 @@ public class Match implements Serializable {
             if (index < 0 || index >= MAX_SETS || setResult == null || setResult.length != 2) {
                 throw new IllegalArgumentException("Invalid index or result data.");
             }
-            this.setResults[index] = setResult;
+            this.setResults[index] = setResult.clone(); // defensive copy: caller keeps no reference
         }
     }
 

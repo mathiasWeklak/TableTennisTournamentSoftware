@@ -11,35 +11,39 @@ import java.util.List;
 /**
  * View for previewing and printing referee sheets (Schiedsrichterzettel).
  *
- * <p>Displays one tab per match, each containing a read-only table with player names,
- * set rows, and a total-result row. A print button delegates to
- * {@link RefereeSheetsController#printRefereeSheets()}.</p>
+ * <p>Shown as a modeless dialog owned by the tournament window, so it is closed together with it.
+ * Displays the tournament name and round as heading and one tab per match, each containing a
+ * read-only table with player names, set rows, and a total-result row. Tabs are labelled with
+ * table number and last names (e.g. {@code "T1: Müller – Meier"}), since tables can repeat
+ * within a round. A print button delegates to {@link RefereeSheetsController#printRefereeSheets()}.</p>
  */
-public class RefereeSheetsView extends JFrame {
+public class RefereeSheetsView extends JDialog {
 
     private final RefereeSheetsController controller;
 
     /**
-     * Constructs the referee sheets view and immediately displays it.
+     * Constructs the referee sheets view as a modeless dialog and immediately displays it.
      *
+     * @param owner      the window owning this dialog (closing it also closes this dialog); may be {@code null}
      * @param controller the controller providing the table model and print logic
      * @param matches    the list of matches to display sheets for
      */
-    public RefereeSheetsView(RefereeSheetsController controller, List<Match> matches) {
+    public RefereeSheetsView(Window owner, RefereeSheetsController controller, List<Match> matches) {
+        super(owner, "Schiedsrichterzettel", ModalityType.MODELESS);
         this.controller = controller;
         initializeUI(matches);
     }
 
     /**
-     * Builds and displays the window with a tabbed pane containing one sheet per match.
+     * Builds and displays the dialog with a heading and a tabbed pane containing one sheet per match.
      *
      * @param matches the list of matches to render
      */
     private void initializeUI(List<Match> matches) {
-        setTitle("Schiedsrichterzettel");
+        setTitle("Schiedsrichterzettel – " + controller.getHeaderText());
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setSize(700, 520);
-        setLocationRelativeTo(null);
+        UITheme.sizeToScreen(this, 700, 560);
+        setLocationRelativeTo(getOwner());
         getContentPane().setBackground(UITheme.BACKGROUND);
 
         JPanel contentPane = new JPanel(new BorderLayout(0, 0));
@@ -55,18 +59,25 @@ public class RefereeSheetsView extends JFrame {
         buttonPanel.add(printButton);
         contentPane.add(buttonPanel, BorderLayout.SOUTH);
 
+        JLabel headerLabel = new JLabel(controller.getHeaderText());
+        headerLabel.setFont(UITheme.FONT_SUBTITLE);
+        headerLabel.setForeground(UITheme.PRIMARY);
+        headerLabel.setBorder(new EmptyBorder(0, 2, 8, 2));
+        contentPane.add(headerLabel, BorderLayout.NORTH);
+
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.setFont(UITheme.FONT_BODY);
         contentPane.add(tabbedPane, BorderLayout.CENTER);
 
         matches.forEach(match -> {
+            String sheetLabel = controller.getSheetLabel(match);
             JPanel matchPanel = new JPanel(new BorderLayout(0, 0));
             matchPanel.setBackground(UITheme.BACKGROUND);
             matchPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
             JPanel tableCard = new JPanel(new BorderLayout());
             tableCard.setBackground(UITheme.SURFACE);
-            tableCard.setBorder(UITheme.cardBorder("Tisch " + match.getTableNumber()));
+            tableCard.setBorder(UITheme.cardBorder(sheetLabel));
 
             JTable table = new JTable(controller.createRefereeSheetTableModel(match));
             configureTable(table);
@@ -75,7 +86,10 @@ public class RefereeSheetsView extends JFrame {
             tableCard.add(new JScrollPane(table), BorderLayout.CENTER);
 
             matchPanel.add(tableCard, BorderLayout.CENTER);
-            tabbedPane.addTab("Tisch " + match.getTableNumber(), matchPanel);
+            tabbedPane.addTab(sheetLabel, matchPanel);
+            tabbedPane.setToolTipTextAt(tabbedPane.getTabCount() - 1,
+                    "Tisch " + match.getTableNumber() + ": " + match.getFirstPlayer().getFullName()
+                            + " – " + match.getSecondPlayer().getFullName());
         });
 
         setVisible(true);

@@ -180,46 +180,6 @@ public class PairingEngineTest {
     }
 
     @Test
-    public void testSelectUniquePlayerMatches_twoPlayers_returnsMatch() {
-        PairingEngine engine = new PairingEngine(List.of(p1, p2), 1, TournamentMode.SWISS);
-        List<Match> matchList = new ArrayList<>(List.of(new Match(p1, p2, -1)));
-        List<Match> result = engine.selectUniquePlayerMatches(matchList, new ArrayList<>(List.of(1)));
-        assertNotNull(result);
-        assertEquals(1, result.size());
-    }
-
-    @Test
-    public void testSelectUniquePlayerMatches_tableAssigned() {
-        PairingEngine engine = new PairingEngine(List.of(p1, p2), 1, TournamentMode.SWISS);
-        List<Match> matchList = new ArrayList<>(List.of(new Match(p1, p2, -1)));
-        List<Match> result = engine.selectUniquePlayerMatches(matchList, new ArrayList<>(List.of(5)));
-        assertNotNull(result);
-        assertEquals(5, result.getFirst().getTableNumber());
-    }
-
-    @Test
-    public void testSelectUniquePlayerMatches_notAllPlayersCovered_returnsNull() {
-        PairingEngine engine = new PairingEngine(List.of(p1, p2, p3), 1, TournamentMode.SWISS);
-        List<Match> matchList = new ArrayList<>(List.of(new Match(p1, p2, -1)));
-        List<Match> result = engine.selectUniquePlayerMatches(matchList, new ArrayList<>(List.of(1)));
-        assertNull(result);
-    }
-
-    @Test
-    public void testSelectUniquePlayerMatches_oddPlayers_includesByeMatch() {
-        PairingEngine engine = new PairingEngine(List.of(p1, p2, p3), 1, TournamentMode.SWISS);
-        List<Match> matchList = new ArrayList<>(List.of(
-                new Match(p1, p2, -1),
-                new Match(p3, null, -1)
-        ));
-        List<Match> result = engine.selectUniquePlayerMatches(matchList, new ArrayList<>(List.of(1)));
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        long byeCount = result.stream().filter(m -> m.getSecondPlayer() == null).count();
-        assertEquals(1, byeCount);
-    }
-
-    @Test
     public void testRestoreState_replacesMatchesAndAllMatches() {
         PairingEngine engine = new PairingEngine(List.of(p1, p2), 1, TournamentMode.SWISS);
         Match m1 = new Match(p1, p2, 1);
@@ -587,7 +547,7 @@ public class PairingEngineTest {
     }
 
     @Test
-    public void testSwissRound2_outerPairingInsideScoreGroups() {
+    public void testSwissRound2_upperHalfAgainstLowerHalfInsideScoreGroups() {
         Player s1 = new Player("S1", "X", "C", 2000);
         Player s2 = new Player("S2", "X", "C", 1900);
         Player s3 = new Player("S3", "X", "C", 1800);
@@ -606,14 +566,14 @@ public class PairingEngineTest {
         engine.generatePairings(2);
         List<Match> matches = engine.getMatches();
 
-        assertEquals(s4, opponentOf(findMatchFor(matches, s1), s1));
-        assertEquals(s3, opponentOf(findMatchFor(matches, s2), s2));
-        assertEquals(s8, opponentOf(findMatchFor(matches, s5), s5));
-        assertEquals(s7, opponentOf(findMatchFor(matches, s6), s6));
+        assertEquals(s3, opponentOf(findMatchFor(matches, s1), s1));
+        assertEquals(s4, opponentOf(findMatchFor(matches, s2), s2));
+        assertEquals(s7, opponentOf(findMatchFor(matches, s5), s5));
+        assertEquals(s8, opponentOf(findMatchFor(matches, s6), s6));
     }
 
     @Test
-    public void testSwissRound2_eightWinners_eachPlaysOuterPair() {
+    public void testSwissRound2_eightWinners_upperHalfAgainstLowerHalf() {
         List<Player> players = new ArrayList<>();
         for (int i = 1; i <= 16; i++) {
             players.add(new Player("P" + i, "X", "C", 2100 - i * 10));
@@ -626,14 +586,13 @@ public class PairingEngineTest {
         engine.generatePairings(2);
         List<Match> matches = engine.getMatches();
 
-        assertEquals(players.get(7), opponentOf(findMatchFor(matches, players.get(0)), players.get(0)));
-        assertEquals(players.get(6), opponentOf(findMatchFor(matches, players.get(1)), players.get(1)));
-        assertEquals(players.get(5), opponentOf(findMatchFor(matches, players.get(2)), players.get(2)));
-        assertEquals(players.get(4), opponentOf(findMatchFor(matches, players.get(3)), players.get(3)));
-
-        assertEquals(players.get(15), opponentOf(findMatchFor(matches, players.get(8)), players.get(8)));
-        assertEquals(players.get(14), opponentOf(findMatchFor(matches, players.get(9)), players.get(9)));
-        assertEquals(players.get(13), opponentOf(findMatchFor(matches, players.get(10)), players.get(10)));
-        assertEquals(players.get(12), opponentOf(findMatchFor(matches, players.get(11)), players.get(11)));
+        // winners P1..P8: 1-5, 2-6, 3-7, 4-8
+        for (int i = 0; i < 4; i++) {
+            assertEquals(players.get(i + 4), opponentOf(findMatchFor(matches, players.get(i)), players.get(i)));
+        }
+        // losers P9..P16: 9-13, 10-14, 11-15, 12-16
+        for (int i = 8; i < 12; i++) {
+            assertEquals(players.get(i + 4), opponentOf(findMatchFor(matches, players.get(i)), players.get(i)));
+        }
     }
 }

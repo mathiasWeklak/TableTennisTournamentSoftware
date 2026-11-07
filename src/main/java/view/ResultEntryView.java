@@ -4,6 +4,7 @@ import static model.Match.MAX_SETS;
 
 import controller.ResultEntryController;
 import model.Match;
+import model.Player;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -12,71 +13,202 @@ import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 
 /**
- * View for entering match results during a tournament round.
+ * Modal dialog for entering match results.
  *
- * <p>Displays one tab per non-bye match. Each tab contains per-set score fields for both
- * players and read-only summary fields that update automatically as set scores are entered.
- * Saving (either via button or window close) delegates to
- * {@link ResultEntryController#saveResults(boolean)}.</p>
+ * <p>Displays one tab per non-bye match of the selected round; complete matches are marked with
+ * a check mark. Keyboard flow: the content of a score field is selected when it gets the focus,
+ * Enter moves to the next field and from the last field to the next match, Ctrl+S saves.
+ * Closing asks about unsaved changes.</p>
  */
-public class ResultEntryView extends JFrame {
+public class ResultEntryView extends JDialog {
+
+    private static final String DONE_MARK = "✓ ";
 
     private final JTabbedPane tabbedPane;
     private final ResultEntryController controller;
+    private final JLabel hintLabel;
 
     /**
-     * Constructs the result entry window and displays it.
+     * Constructs the modal result entry dialog. The caller fills it with
+     * {@link #showMatches(List, boolean)} and makes it visible.
      *
-     * @param controller      the controller handling save and auto-update logic
-     * @param matches         the list of matches whose results can be entered
+     * @param owner        the window that owns the dialog
+     * @param controller   the controller handling save and auto-update logic
+     * @param rounds       the rounds that can be selected (ascending)
+     * @param initialRound the round shown first
      */
-    public ResultEntryView(ResultEntryController controller, List<Match> matches) {
+    public ResultEntryView(Window owner, ResultEntryController controller, List<Integer> rounds, int initialRound) {
+        super(owner, "Ergebniserfassung", ModalityType.APPLICATION_MODAL);
         this.controller = controller;
 
-        setTitle("Ergebniserfassung");
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());
-        setSize(560, 520);
+        UITheme.sizeToScreen(this, 600, 580);
         getContentPane().setBackground(UITheme.BACKGROUND);
+
+        // --- round selection ---
+        JPanel roundRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        roundRow.setBackground(UITheme.BACKGROUND);
+        JLabel roundLabel = new JLabel("Runde:");
+        roundLabel.setFont(UITheme.FONT_BODY);
+        JComboBox<Integer> roundBox = new JComboBox<>(rounds.toArray(new Integer[0]));
+        roundBox.setSelectedItem(initialRound);
+        roundBox.setFocusable(false);
+        roundBox.addActionListener(_ -> {
+            Integer selected = (Integer) roundBox.getSelectedItem();
+            if (selected != null && !controller.switchRound(selected)) {
+                SwingUtilities.invokeLater(() -> roundBox.setSelectedItem(currentlyShownRound));
+            } else if (selected != null) {
+                currentlyShownRound = selected;
+            }
+        });
+        currentlyShownRound = initialRound;
+        hintLabel = new JLabel(" ");
+        hintLabel.setFont(UITheme.FONT_BODY);
+        hintLabel.setForeground(UITheme.TEXT_MUTED);
+        hintLabel.setBorder(new EmptyBorder(0, 10, 4, 10));
+        roundRow.add(roundLabel);
+        roundRow.add(roundBox);
+        // the hint gets its own row, so it is never pushed out of the visible area
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setBackground(UITheme.BACKGROUND);
+        topPanel.add(roundRow, BorderLayout.NORTH);
+        topPanel.add(hintLabel, BorderLayout.SOUTH);
+        add(topPanel, BorderLayout.NORTH);
 
         tabbedPane = new JTabbedPane();
         tabbedPane.setFont(UITheme.FONT_BODY);
+        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        add(tabbedPane, BorderLayout.CENTER);
 
-        matches.stream()
-                .filter(match -> match.getSecondPlayer() != null)
-                .forEach(match -> tabbedPane.addTab("Tisch " + match.getTableNumber(), createMatchPanel(match)));
-
-        JButton saveButton = UITheme.createPrimaryButton("Ergebnisse speichern");
+        // --- buttons ---
+        JButton saveButton = UITheme.createPrimaryButton("Ergebnisse speichern (Strg+S)");
         saveButton.addActionListener(_ -> controller.saveResults(true));
+        JButton closeButton = UITheme.createSecondaryButton("Schließen");
+        closeButton.addActionListener(_ -> controller.requestClose());
 
-        JPanel savePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
+        JPanel savePanel = new JPanel(new WrapLayout(FlowLayout.CENTER, 10, 10));
         savePanel.setBackground(UITheme.BACKGROUND);
         savePanel.add(saveButton);
-
-        add(tabbedPane, BorderLayout.CENTER);
+        savePanel.add(closeButton);
         add(savePanel, BorderLayout.SOUTH);
+
+        // Ctrl+S saves, Escape closes (with the unsaved-changes question)
+        JRootPane root = getRootPane();
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK), "save");
+        root.getActionMap().put("save", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                controller.saveResults(true);
+            }
+        });
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "close");
+        root.getActionMap().put("close", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                controller.requestClose();
+            }
+        });
 
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                controller.saveResults(false);
-                dispose();
+                controller.requestClose();
             }
         });
 
-        setLocationRelativeTo(null);
-        setVisible(true);
+        setLocationRelativeTo(owner);
+    }
+
+    private int currentlyShownRound;
+
+    /**
+     * Replaces the tabs with the non-bye matches of a round.
+     *
+     * @param matches      the matches of the round
+     * @param earlierRound {@code true} if this is not the current round (shows a hint)
+     */
+    public void showMatches(List<Match> matches, boolean earlierRound) {
+        tabbedPane.removeAll();
+        hintLabel.setText(earlierRound
+                ? "<html><div style='width:520px'>Korrektur einer früheren Runde: ändert die Tabelle, nicht die bereits ausgelosten Runden.</div></html>"
+                : " ");
+        for (Match match : matches) {
+            if (match.getSecondPlayer() == null) continue;
+            String fullNames = match.getFirstPlayer().getFullName() + " vs. " + match.getSecondPlayer().getFullName();
+            String title = ResultEntryController.tabTitle(match);
+            if (indexOfBaseTitle(title) >= 0) {
+                // same table and same last names: fall back to the (unique) full names
+                title = "T" + match.getTableNumber() + ": " + fullNames;
+            }
+            JPanel panel = createMatchPanel(match);
+            panel.putClientProperty("baseTitle", title);
+            tabbedPane.addTab(title, null, panel, fullNames);
+            controller.updateOverallResult(panel);
+        }
+        if (tabbedPane.getTabCount() > 0) {
+            tabbedPane.setSelectedIndex(0);
+            focusFirstField(0);
+        }
+    }
+
+    private int indexOfBaseTitle(String title) {
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            Component c = tabbedPane.getComponentAt(i);
+            if (c instanceof JPanel p && title.equals(p.getClientProperty("baseTitle"))) return i;
+        }
+        return -1;
     }
 
     /**
-     * Builds the result-entry panel for a single match.
-     * Contains per-set score input fields and read-only overall-result summary fields.
-     * The panel stores its field references as client properties for retrieval by the controller.
+     * Marks a tab as complete (check mark) or not.
+     *
+     * @param matchPanel the match panel
+     * @param complete   {@code true} if the entered result is a complete, valid match result
+     */
+    public void markTab(JPanel matchPanel, boolean complete) {
+        int index = tabbedPane.indexOfComponent(matchPanel);
+        if (index < 0) return;
+        String base = (String) matchPanel.getClientProperty("baseTitle");
+        tabbedPane.setTitleAt(index, complete ? DONE_MARK + base : base);
+    }
+
+    /**
+     * Returns the input data of all match tabs.
+     *
+     * @return one entry per tab
+     */
+    public List<ResultEntryController.MatchPanelData> getMatchPanelData() {
+        List<ResultEntryController.MatchPanelData> data = new ArrayList<>();
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (tabbedPane.getComponentAt(i) instanceof JPanel panel
+                    && panel.getClientProperty("matchData") instanceof ResultEntryController.MatchPanelData d) {
+                data.add(d);
+            }
+        }
+        return data;
+    }
+
+    private void focusFirstField(int tabIndex) {
+        if (tabbedPane.getComponentAt(tabIndex) instanceof JPanel panel
+                && panel.getClientProperty("matchData") instanceof ResultEntryController.MatchPanelData d) {
+            SwingUtilities.invokeLater(() -> d.setResultsFields()[0][0].requestFocusInWindow());
+        }
+    }
+
+    /**
+     * Builds the result-entry panel for a single match: per-set score fields and read-only
+     * overall-result fields. The field references are stored as client property "matchData".
      *
      * @param match the match for which to build the entry panel
      * @return the configured match panel
@@ -101,9 +233,7 @@ public class ResultEntryView extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.3;
-        JLabel headerEmpty = new JLabel("");
-        headerEmpty.setFont(UITheme.FONT_SUBTITLE);
-        gridPanel.add(headerEmpty, gbc);
+        gridPanel.add(new JLabel(""), gbc);
 
         gbc.gridx = 1; gbc.weightx = 0.35;
         JLabel p1Header = new JLabel(match.getFirstPlayer().getFullName(), SwingConstants.CENTER);
@@ -141,19 +271,25 @@ public class ResultEntryView extends JFrame {
             gbc.gridx = 2; gbc.weightx = 0.35;
             gridPanel.add(setResultsFields[i][1], gbc);
 
-            setResultsFields[i][0].getDocument().addDocumentListener(new ResultDocumentListener(matchPanel));
-            setResultsFields[i][1].getDocument().addDocumentListener(new ResultDocumentListener(matchPanel));
             addAutoFillBehavior(setResultsFields[i][0], setResultsFields[i][1]);
             addAutoFillBehavior(setResultsFields[i][1], setResultsFields[i][0]);
         });
 
-        if (match.getResults() != null) {
-            IntStream.range(0, MAX_SETS)
-                    .filter(i -> match.getResults()[i] != null)
-                    .forEach(i -> {
-                        setResultsFields[i][0].setText(match.getResults()[i][0]);
-                        setResultsFields[i][1].setText(match.getResults()[i][1]);
-                    });
+        String[][] stored = match.getResults();
+        IntStream.range(0, MAX_SETS)
+                .filter(i -> stored[i] != null)
+                .forEach(i -> {
+                    setResultsFields[i][0].setText(stored[i][0]);
+                    setResultsFields[i][1].setText(stored[i][1]);
+                });
+
+        // listeners after loading, so loading does not count as a change
+        for (int i = 0; i < MAX_SETS; i++) {
+            for (int j = 0; j < 2; j++) {
+                JTextField field = setResultsFields[i][j];
+                field.getDocument().addDocumentListener(new ResultDocumentListener(matchPanel));
+                addKeyboardBehavior(field, i == MAX_SETS - 1 && j == 1);
+            }
         }
 
         JSeparator sep2 = new JSeparator();
@@ -164,12 +300,12 @@ public class ResultEntryView extends JFrame {
 
         JTextField wonSetsField = new JTextField();
         JTextField lostSetsField = new JTextField();
-        wonSetsField.setEditable(false);
-        lostSetsField.setEditable(false);
-        wonSetsField.setHorizontalAlignment(SwingConstants.CENTER);
-        lostSetsField.setHorizontalAlignment(SwingConstants.CENTER);
-        wonSetsField.setFont(UITheme.FONT_SUBTITLE);
-        lostSetsField.setFont(UITheme.FONT_SUBTITLE);
+        for (JTextField total : new JTextField[]{wonSetsField, lostSetsField}) {
+            total.setEditable(false);
+            total.setFocusable(false); // Tab must not stop on the read-only totals
+            total.setHorizontalAlignment(SwingConstants.CENTER);
+            total.setFont(UITheme.FONT_SUBTITLE);
+        }
         wonSetsField.setBackground(new Color(232, 245, 233));
         lostSetsField.setBackground(new Color(255, 235, 238));
 
@@ -184,22 +320,66 @@ public class ResultEntryView extends JFrame {
         gbc.gridx = 2; gbc.weightx = 0.35;
         gridPanel.add(lostSetsField, gbc);
 
-        String overallResult = match.getOverallResult();
-        if (overallResult != null && overallResult.contains(":")) {
-            String[] parts = overallResult.split(":");
-            if (parts.length == 2) {
-                wonSetsField.setText(parts[0]);
-                lostSetsField.setText(parts[1]);
-            }
-        }
-
         scoreCard.add(gridPanel, BorderLayout.CENTER);
         matchPanel.add(scoreCard, BorderLayout.CENTER);
+
+        // walkover (Nichtantritt): fills 3 x 11:0 for the winner
+        JPanel walkoverRow = new JPanel(new WrapLayout(FlowLayout.CENTER, 8, 6));
+        walkoverRow.setBackground(UITheme.BACKGROUND);
+        walkoverRow.add(new JLabel("Kampflos:"));
+        for (boolean firstWins : new boolean[]{true, false}) {
+            Player winner = firstWins ? match.getFirstPlayer() : match.getSecondPlayer();
+            JButton button = UITheme.createSecondaryButton("Sieg " + winner.getLastName());
+            button.setFocusable(false);
+            button.setToolTipText("Nichtantritt: trägt 3 Sätze 11:0 für " + winner.getFullName()
+                    + " ein (zählt als 3:0 mit 33:0 Bällen). Danach speichern.");
+            button.addActionListener(_ -> fillWalkover(setResultsFields, firstWins));
+            walkoverRow.add(button);
+        }
+        matchPanel.add(walkoverRow, BorderLayout.SOUTH);
 
         matchPanel.putClientProperty("matchData",
                 new ResultEntryController.MatchPanelData(setResultsFields, wonSetsField, lostSetsField, match));
 
         return matchPanel;
+    }
+
+    /**
+     * Fills a walkover result: three sets 11:0 for the winner, the remaining sets empty.
+     *
+     * @param fields    the score fields of the match
+     * @param firstWins {@code true} if the first player wins
+     */
+    static void fillWalkover(JTextField[][] fields, boolean firstWins) {
+        for (int i = 0; i < MAX_SETS; i++) {
+            boolean played = i < model.ResultRules.SETS_TO_WIN;
+            fields[i][0].setText(played ? (firstWins ? "11" : "0") : "");
+            fields[i][1].setText(played ? (firstWins ? "0" : "11") : "");
+        }
+    }
+
+    /**
+     * Selects the field content on focus (so typing replaces a wrong value) and makes Enter move
+     * to the next field; from the last field of a match Enter moves to the next match.
+     */
+    private void addKeyboardBehavior(JTextField field, boolean lastFieldOfMatch) {
+        field.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                SwingUtilities.invokeLater(field::selectAll);
+            }
+        });
+        field.addActionListener(_ -> {
+            if (lastFieldOfMatch) {
+                int next = tabbedPane.getSelectedIndex() + 1;
+                if (next < tabbedPane.getTabCount()) {
+                    tabbedPane.setSelectedIndex(next);
+                    focusFirstField(next);
+                }
+            } else {
+                field.transferFocus();
+            }
+        });
     }
 
     /**
@@ -215,7 +395,6 @@ public class ResultEntryView extends JFrame {
 
     /**
      * Returns the tabbed pane containing one result-entry tab per match.
-     * Used by the controller to iterate over match panels and read entered scores.
      *
      * @return the tabbed pane
      */
@@ -256,28 +435,20 @@ public class ResultEntryView extends JFrame {
 
         private final JPanel matchPanel;
 
-        /**
-         * Constructs a listener bound to the given match panel.
-         *
-         * @param matchPanel the panel containing the score fields to monitor
-         */
         ResultDocumentListener(JPanel matchPanel) {
             this.matchPanel = matchPanel;
         }
 
-        /** {@inheritDoc} */
         @Override
         public void insertUpdate(DocumentEvent e) {
             controller.updateOverallResult(matchPanel);
         }
 
-        /** {@inheritDoc} */
         @Override
         public void removeUpdate(DocumentEvent e) {
             controller.updateOverallResult(matchPanel);
         }
 
-        /** {@inheritDoc} */
         @Override
         public void changedUpdate(DocumentEvent e) {
             controller.updateOverallResult(matchPanel);

@@ -2,6 +2,7 @@ package controller;
 
 import model.Match;
 import model.Player;
+import model.ResultRules;
 import model.TournamentMode;
 import model.TournamentState;
 import view.TournamentRoundView;
@@ -11,16 +12,14 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.print.PageFormat;
-import java.awt.print.Paper;
-import java.awt.print.PrinterException;
-import java.awt.print.PrinterJob;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 /**
- * Controller for a tournament round. Delegates all pairing logic to {@link PairingEngine},
- * score calculation to {@link ScoreCalculator}, and all UI rendering to {@link TournamentRoundView}.
+ * Controller for a running tournament. Delegates pairing logic to {@link PairingEngine},
+ * score calculation to {@link ScoreCalculator}, the ranking to {@link Standings} and all
+ * rendering to {@link TournamentRoundView}.
  */
 public class TournamentRound {
 
@@ -28,15 +27,17 @@ public class TournamentRound {
     private final int tableNumber;
     private final TournamentMode mode;
     private final String tournamentName;
+    private final int plannedRounds;
 
     private final PairingEngine pairingEngine;
     private final ScoreCalculator scoreCalculator;
     private final TournamentRoundView view;
+    private CrossTableController crossTable;
 
     private int currentRound;
 
     /**
-     * Constructs a new TournamentRound, initializes the view, and generates the first round's pairings.
+     * Constructs a new tournament without planned round count and draws the first round.
      *
      * @param playerList     the list of players participating in the tournament
      * @param tournamentName the name of the tournament
@@ -44,73 +45,106 @@ public class TournamentRound {
      * @param mode           the tournament mode (SWISS or ROUND_ROBIN)
      */
     public TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode) {
-        this(playerList, tournamentName, tableNumber, mode, false);
+        this(playerList, tournamentName, tableNumber, mode, 0);
+    }
+
+    /**
+     * Constructs a new tournament and draws the first round.
+     *
+     * @param playerList     the list of players participating in the tournament
+     * @param tournamentName the name of the tournament
+     * @param tableNumber    the number of available tables
+     * @param mode           the tournament mode (SWISS or ROUND_ROBIN)
+     * @param plannedRounds  planned number of rounds (Swiss), 0 = until no pairing is possible
+     */
+    public TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode,
+                           int plannedRounds) {
+        this(playerList, tournamentName, tableNumber, mode, plannedRounds, false);
     }
 
     private TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode,
-                             boolean skipInitialPairing) {
-        this.playerList = new ArrayList<>(playerList);
+                            int plannedRounds, boolean skipInitialPairing) {
+        this.playerList = skipInitialPairing ? new ArrayList<>(playerList) : seed(playerList, new Random());
         this.tableNumber = tableNumber;
         this.mode = mode;
         this.tournamentName = tournamentName;
+        this.plannedRounds = mode == TournamentMode.SWISS ? Math.max(0, plannedRounds) : 0;
         this.currentRound = 1;
 
+        // the engine shares playerList, so late registrations are paired from the next round on
         this.pairingEngine = new PairingEngine(this.playerList, tableNumber, mode);
-        this.scoreCalculator = new ScoreCalculator(pairingEngine.getAllMatches());
+        this.scoreCalculator = new ScoreCalculator(pairingEngine.getAllMatches(), mode);
+        // Round Robin: all matches of a withdrawn player are struck (live view of the withdrawn set)
+        this.scoreCalculator.setAnnulledPlayers(pairingEngine.getWithdrawn());
 
         this.view = new TournamentRoundView(tournamentName, mode);
+        wireActions();
 
+        if (!skipInitialPairing) {
+            if (pairingEngine.generatePairings(currentRound) == null) {
+                pairingEngine.setFinished(true);
+                JOptionPane.showMessageDialog(view, "Es konnte keine Runde ausgelost werden.",
+                        "Keine Paarungen möglich", JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
+        updateResultsTable();
+    }
+
+    /**
+     * Returns the seeding order for a new tournament: TTR descending; players with equal TTR
+     * (e.g. all without TTR) are ordered by lot. The order is kept for the whole tournament and is
+     * the last tie-break for pairing and standings.
+     *
+     * @param players the registered players
+     * @param random  source for the lot
+     * @return a new list in seeding order
+     */
+    static List<Player> seed(List<Player> players, Random random) {
+        List<Player> shuffled = new ArrayList<>(players);
+        Collections.shuffle(shuffled, random);
+        shuffled.sort(Comparator.comparingInt(Player::getTtr).reversed()); // stable: lot decides ties
+        return shuffled;
+    }
+
+    /**
+     * Returns the total number of rounds, or 0 if open (Swiss without planned round count).
+     *
+     * @return the planned rounds (Swiss) or the Round Robin round count
+     */
+    int totalRounds() {
+        return mode == TournamentMode.ROUND_ROBIN ? pairingEngine.roundRobinRounds() : plannedRounds;
+    }
+
+    private void wireActions() {
         view.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
                 if (JOptionPane.showConfirmDialog(view,
-                        "Wollen Sie das Turnier wirklich beenden?", "Bestätigung",
+                        "Programm schließen? Der Turnierstand wird gespeichert.", "Schließen",
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION) {
-                    view.dispose();
+                    saveTournamentState();
+                    view.dispose(); // owned dialogs (cross table, referee sheets) close with it
                 }
             }
         });
 
         view.getPreviewRefereeSheetsButton().addActionListener(_ -> previewRefereeSheets());
-
         view.getResultEntryButton().addActionListener(_ -> {
-            new ResultEntryController(pairingEngine.getMatches(), this);
+            new ResultEntryController(view, this);
             updateResultsTable();
         });
-
         view.getPrintTableButton().addActionListener(_ -> printPlacementTable());
         view.getCrossTableButton().addActionListener(_ -> showCrossTable());
         view.getNextRoundButton().addActionListener(_ -> startNextRound());
-
+        view.getUndoRoundButton().addActionListener(_ -> undoLastRound());
+        view.getWithdrawPlayerButton().addActionListener(_ -> withdrawPlayer());
+        if (view.getAddPlayerButton() != null) {
+            view.getAddPlayerButton().addActionListener(_ -> addLatePlayer());
+        }
         if (view.getManipulateButton() != null) {
-            view.getManipulateButton().addActionListener(_ -> {
-                boolean resultsEntered = pairingEngine.getMatches().stream()
-                        .anyMatch(match -> match.getSecondPlayer() != null && !match.getOverallResult().isEmpty());
-
-                if (!resultsEntered) {
-                    List<Match> allPossibleOpenMatches = pairingEngine.calculateAllPossibleOpenMatches();
-                    allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
-                    Set<Match> uniqueMatches = new LinkedHashSet<>(allPossibleOpenMatches);
-                    new MatchManagerController(uniqueMatches, playerList.size(), this).getView().setVisible(true);
-                } else {
-                    JOptionPane.showMessageDialog(view,
-                            "Setzung kann nicht manipuliert werden, da bereits Ergebnisse eingetragen wurden.",
-                            "Ergebnisse vorhanden", JOptionPane.WARNING_MESSAGE);
-                }
-            });
+            view.getManipulateButton().addActionListener(_ -> manipulatePairings());
         }
-
-        if (!skipInitialPairing) {
-            String pairingsText = pairingEngine.generatePairings(currentRound);
-            if (pairingsText != null) {
-                view.getPairingsTextArea().setText(pairingsText);
-            } else {
-                JOptionPane.showMessageDialog(view, "Es wurden bereits alle möglichen Kombinationen gespielt.",
-                        "Keine Paarungen mehr möglich", JOptionPane.INFORMATION_MESSAGE);
-            }
-        }
-        updateResultsTable();
     }
 
     /**
@@ -122,34 +156,99 @@ public class TournamentRound {
         view.setVisible(visible);
     }
 
+    // ---------------------------------------------------------------------------------------
+    // Display
+    // ---------------------------------------------------------------------------------------
+
     /**
-     * Recalculates all player statistics via {@link ScoreCalculator} and refreshes
-     * the standings table in the UI to reflect the latest results.
+     * Recalculates all statistics and refreshes the standings, the pairings with their result
+     * status, an open cross table and the enabled state of the buttons.
      */
     public void updateResultsTable() {
         scoreCalculator.calculate(playerList);
+        List<Standings.Entry> standings = currentStandings();
 
-        DefaultTableModel tableModel = getDefaultTableModel(playerList);
+        DefaultTableModel tableModel = getDefaultTableModel(standings);
         view.getResultsTable().setModel(tableModel);
         UITheme.applyTableStyling(view.getResultsTable());
         UITheme.setNameColumnWide(view.getResultsTable(), 1);
 
+        view.getPairingsTextArea().setText(formatPairingsWithStatus(pairingEngine.getMatches(), mode));
+        view.getPairingsTextArea().setCaretPosition(0);
+        if (crossTable != null && crossTable.isOpen()) {
+            crossTable.refresh(standings.stream().map(Standings.Entry::player).toList(), countingMatches());
+        }
+        updateControls();
         view.validate();
         view.repaint();
     }
 
-    /**
-     * Builds the {@link DefaultTableModel} for the standings table.
-     * Columns differ between Swiss System (includes BHZ and fBHZ) and Round Robin mode.
-     *
-     * @param allPlayers the players to include, sorted and ranked before adding to the model
-     * @return the populated table model
-     */
-    private DefaultTableModel getDefaultTableModel(List<Player> allPlayers) {
-        List<Player> sorted = new ArrayList<>(allPlayers);
-        sortPlayers(sorted);
-        sorted = sorted.reversed();
+    private List<Standings.Entry> currentStandings() {
+        return Standings.compute(playerList, mode, countingMatches());
+    }
 
+    /**
+     * Returns the matches that count: in Round Robin without the struck matches of withdrawn
+     * players, otherwise all matches.
+     *
+     * @return the counting matches
+     */
+    private List<Match> countingMatches() {
+        return ScoreCalculator.countingMatches(pairingEngine.getAllMatches(), mode, pairingEngine.getWithdrawn());
+    }
+
+    private void updateControls() {
+        boolean finished = pairingEngine.isFinished();
+        view.showRound(currentRound, totalRounds(), finished);
+        view.getNextRoundButton().setEnabled(!finished);
+        view.getUndoRoundButton().setEnabled(pairingEngine.canUndoLastRound());
+        view.getWithdrawPlayerButton().setEnabled(!finished);
+        if (view.getAddPlayerButton() != null) view.getAddPlayerButton().setEnabled(!finished);
+        if (view.getManipulateButton() != null) view.getManipulateButton().setEnabled(!finished);
+        boolean hasMatches = pairingEngine.getMatches().stream().anyMatch(m -> m.getSecondPlayer() != null);
+        view.getPreviewRefereeSheetsButton().setEnabled(hasMatches && !finished);
+        view.getResultEntryButton().setEnabled(hasMatches || currentRound > 1);
+    }
+
+    /**
+     * Formats the current round's pairings with their result status, e.g.
+     * "Tisch 1: Anna Alpha (TTC A) – Ben Beta (TTC B)   3:1" or "... offen".
+     *
+     * @param matches the current round's matches
+     * @param mode    the tournament mode (wording of the bye)
+     * @return the text for the pairings area
+     */
+    static String formatPairingsWithStatus(List<Match> matches, TournamentMode mode) {
+        StringBuilder sb = new StringBuilder();
+        long open = matches.stream()
+                .filter(m -> m.getSecondPlayer() != null && !m.isDecided())
+                .count();
+        for (Match m : matches) {
+            Player a = m.getFirstPlayer();
+            if (m.getSecondPlayer() == null) {
+                sb.append("           ").append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
+                        .append(mode == TournamentMode.ROUND_ROBIN ? "spielfrei" : "Freilos").append('\n');
+                continue;
+            }
+            Player b = m.getSecondPlayer();
+            int[] sets = m.decidedSets();
+            String status = sets != null ? sets[0] + ":" + sets[1] : "offen";
+            sb.append(String.format("Tisch %2d: ", m.getTableNumber()))
+                    .append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
+                    .append(b.getFullName()).append(" (").append(b.getClub()).append(")   ")
+                    .append(status).append('\n');
+        }
+        if (!matches.isEmpty()) {
+            sb.append('\n').append(open == 0 ? "Alle Ergebnisse erfasst." : open + " Begegnung(en) offen.");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Builds the standings table model. Columns differ between Swiss System (with BHZ and fBHZ)
+     * and Round Robin. Players equal in all criteria share a rank; withdrawn players are marked.
+     */
+    private DefaultTableModel getDefaultTableModel(List<Standings.Entry> standings) {
         DefaultTableModel tableModel = new DefaultTableModel() {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -167,169 +266,300 @@ public class TournamentRound {
         tableModel.addColumn("Sätze");
         tableModel.addColumn("Bälle");
 
-        for (int i = 0; i < sorted.size(); i++) {
-            tableModel.addRow(getRowData(sorted.get(i), i));
+        Set<Player> withdrawn = pairingEngine.getWithdrawn();
+        boolean struck = mode == TournamentMode.ROUND_ROBIN;
+        List<Standings.Entry> ordered = new ArrayList<>(standings);
+        if (struck) {
+            // Round Robin: withdrawn players are struck from the ranking and listed at the end
+            ordered.sort(Comparator.comparing((Standings.Entry e) -> withdrawn.contains(e.player())));
         }
-
+        for (Standings.Entry entry : ordered) {
+            Player player = entry.player();
+            boolean out = withdrawn.contains(player);
+            String name = player.getFullName() + " (" + player.getClub() + ")"
+                    + (out ? (struck ? " – zurückgezogen, Spiele gestrichen" : " – zurückgezogen") : "");
+            Object rank = out && struck ? "–" : entry.rank();
+            List<Object> row = new ArrayList<>(List.of(rank, name, player.getPoints(),
+                    player.getWins() + ":" + player.getLosses()));
+            if (mode == TournamentMode.SWISS) {
+                row.add(player.getBuchholz());
+                row.add(player.getFeinBuchholz());
+            }
+            row.add(player.getSetsWon() + ":" + player.getSetsLost());
+            row.add(player.getBallsWon() + ":" + player.getBallsLost());
+            tableModel.addRow(row.toArray());
+        }
         return tableModel;
     }
 
-    /**
-     * Builds the data array for a single row in the standings table.
-     *
-     * @param player the player for this row
-     * @param i      the zero-based rank index (displayed as {@code i + 1})
-     * @return the row data array
-     */
-    private Object[] getRowData(Player player, int i) {
-        String winsLosses = player.getWins() + ":" + player.getLosses();
-        if (mode == TournamentMode.SWISS) {
-            return new Object[]{
-                    i + 1,
-                    player.getFullName() + " (" + player.getClub() + ")",
-                    player.getPoints(),
-                    winsLosses,
-                    player.getBuchholz(),
-                    player.getFeinBuchholz(),
-                    player.getSetsWon() + ":" + player.getSetsLost(),
-                    player.getBallsWon() + ":" + player.getBallsLost()
-            };
-        } else {
-            return new Object[]{
-                    i + 1,
-                    player.getFullName() + " (" + player.getClub() + ")",
-                    player.getPoints(),
-                    winsLosses,
-                    player.getSetsWon() + ":" + player.getSetsLost(),
-                    player.getBallsWon() + ":" + player.getBallsLost()
-            };
-        }
-    }
+    // ---------------------------------------------------------------------------------------
+    // Actions
+    // ---------------------------------------------------------------------------------------
 
-    /**
-     * Sorts the player list in-place using the ranking criteria appropriate for the current mode.
-     *
-     * @param players the list of players to sort
-     */
-    private void sortPlayers(List<Player> players) {
-        PairingEngine.sortPlayersByRanking(players, mode);
-    }
-
-    /**
-     * Opens the referee sheet preview window for all non-bye matches in the current round.
-     */
     private void previewRefereeSheets() {
         List<Match> matchesWithoutBye = pairingEngine.getMatches().stream()
                 .filter(match -> match.getSecondPlayer() != null)
                 .toList();
-        new RefereeSheetsController(matchesWithoutBye);
+        new RefereeSheetsController(view, matchesWithoutBye, tournamentName, currentRound);
+    }
+
+    private void manipulatePairings() {
+        boolean resultsEntered = pairingEngine.getMatches().stream()
+                .anyMatch(match -> match.getSecondPlayer() != null && !match.getOverallResult().isEmpty());
+        if (resultsEntered) {
+            JOptionPane.showMessageDialog(view,
+                    "Setzung kann nicht manipuliert werden, da bereits Ergebnisse eingetragen wurden.",
+                    "Ergebnisse vorhanden", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        List<Match> allPossibleOpenMatches = pairingEngine.calculateAllPossibleOpenMatches();
+        allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
+        Set<Match> uniqueMatches = new LinkedHashSet<>(allPossibleOpenMatches);
+        new MatchManagerController(view, uniqueMatches, pairingEngine.activePlayers().size(), this)
+                .getView().setVisible(true);
     }
 
     /**
-     * Advances to the next round. Validates that all current-round results have been entered,
-     * increments the round counter, clears the current pairings, and generates new ones.
-     * Saves the tournament state after a successful transition.
-     * Shows a warning dialog if any results are still missing.
+     * Closes the current round and draws the next one, after a confirmation. If the planned
+     * number of rounds is reached or no further round can be drawn, the tournament is finished;
+     * the last round stays visible and editable.
      */
     public void startNextRound() {
-        boolean unfinished = pairingEngine.getMatches().stream()
-                .anyMatch(match -> match.getSecondPlayer() != null
-                        && (match.getOverallResult().isEmpty() || match.getOverallResult().equals(":")));
-        if (unfinished) {
+        if (pairingEngine.isFinished()) return;
+        List<String> open = unfinishedMatchDescriptions(countingMatches());
+        if (!open.isEmpty()) {
             JOptionPane.showMessageDialog(view,
-                    "Es gibt noch unbeendete Begegnungen. Bitte alle Ergebnisse erfassen, bevor die nächste Runde gestartet werden kann.",
+                    "Es gibt noch unbeendete oder ungültig erfasste Begegnungen. Bitte alle Ergebnisse vollständig erfassen\n"
+                            + "(ein Spieler muss 3 Sätze gewonnen haben), bevor die nächste Runde gestartet werden kann:\n\n"
+                            + String.join("\n", open.subList(0, Math.min(15, open.size())))
+                            + (open.size() > 15 ? "\n…" : ""),
                     "Unbeendete Begegnungen", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        pairingEngine.clearCurrentRound();
-        String pairingsText = pairingEngine.generatePairings(currentRound + 1);
-
-        if (pairingsText != null) {
-            currentRound++;
-            view.getCurrentRoundLabel().setText("Runde " + currentRound);
-            view.getPairingsTextArea().setText(pairingsText);
-        } else {
-            view.getPairingsTextArea().setText("");
+        int total = totalRounds();
+        if (total > 0 && currentRound >= total) {
+            String text = mode == TournamentMode.ROUND_ROBIN
+                    ? "Alle " + total + " Runden sind gespielt.\nTurnier jetzt abschließen?"
+                    : "Runde " + currentRound + " war die letzte geplante Runde.\nTurnier jetzt abschließen?";
+            if (confirm(text, "Turnier abschließen")) {
+                finishTournament("Das Turnier ist nach " + currentRound + " Runden beendet.");
+            }
+            return;
         }
 
-        saveTournamentState();
+        if (!confirm("Runde " + currentRound + " abschließen und Runde " + (currentRound + 1) + " auslosen?",
+                "Nächste Runde")) {
+            return;
+        }
 
+        saveRoundBackup(); // state after the completed round; never invalidated by an undo
+        String pairingsText = pairingEngine.generateNextRound(currentRound + 1);
         if (pairingsText == null) {
-            JOptionPane.showMessageDialog(view, "Es wurden bereits alle möglichen Kombinationen gespielt.",
-                    "Keine Paarungen mehr möglich", JOptionPane.INFORMATION_MESSAGE);
+            String reason = pairingEngine.activePlayers().size() < 2
+                    ? "Es sind weniger als zwei Spieler aktiv."
+                    : mode == TournamentMode.ROUND_ROBIN
+                    ? "Alle Runden sind gespielt."
+                    : "Es ist keine weitere Runde ohne Wiederholungsbegegnung möglich.";
+            finishTournament(reason + "\nDas Turnier ist nach " + currentRound + " Runden beendet.");
+            return;
         }
-
+        currentRound++;
         updateResultsTable();
+        saveTournamentState();
+    }
+
+    private void finishTournament(String message) {
+        pairingEngine.setFinished(true);
+        updateResultsTable();
+        saveTournamentState();
+        JOptionPane.showMessageDialog(view, message, "Turnier beendet", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void undoLastRound() {
+        if (!pairingEngine.canUndoLastRound()) return;
+        if (!confirm("Die Auslosung von Runde " + currentRound + " zurücknehmen?\n"
+                + "Runde " + (currentRound - 1) + " wird wieder die aktuelle Runde.", "Auslosung zurücknehmen")) {
+            return;
+        }
+        pairingEngine.undoLastRound();
+        currentRound--;
+        updateResultsTable();
+        saveTournamentState();
+    }
+
+    private void withdrawPlayer() {
+        List<Player> active = pairingEngine.activePlayers();
+        if (active.size() <= 2) {
+            JOptionPane.showMessageDialog(view, "Es müssen mindestens zwei Spieler im Turnier bleiben.",
+                    "Spieler zurückziehen", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        JComboBox<Player> box = new JComboBox<>(active.toArray(new Player[0]));
+        int choice = JOptionPane.showConfirmDialog(view,
+                new Object[]{"Welcher Spieler zieht sich zurück?", box,
+                        mode == TournamentMode.ROUND_ROBIN
+                                ? "Alle seine Spiele werden gestrichen, auch die bereits gespielten.\n"
+                                + "In den restlichen Runden sind seine Gegner spielfrei."
+                                : "Bisherige Ergebnisse bleiben bestehen. Ab der nächsten Auslosung wird er nicht mehr gepaart."},
+                "Spieler zurückziehen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        Player player = (Player) box.getSelectedItem();
+        if (choice != JOptionPane.OK_OPTION || player == null) return;
+        pairingEngine.withdraw(player);
+        updateResultsTable();
+        saveTournamentState();
+        boolean openMatch = mode == TournamentMode.SWISS && pairingEngine.getMatches().stream()
+                .anyMatch(m -> m.getSecondPlayer() != null
+                        && (m.getFirstPlayer().equals(player) || m.getSecondPlayer().equals(player))
+                        && !m.isDecided());
+        if (openMatch) {
+            JOptionPane.showMessageDialog(view, player.getFullName() + " hat in dieser Runde noch ein offenes Spiel.\n"
+                    + "Bitte das Ergebnis erfassen (bei Nichtantritt z. B. 3:0 mit 11:0-Sätzen für den Gegner).");
+        }
+    }
+
+    private void addLatePlayer() {
+        Player newPlayer = PlayerDialog.show(view, "Spieler nachmelden", null, playerList);
+        if (newPlayer == null) return;
+        playerList.add(newPlayer);
+        updateResultsTable();
+        saveTournamentState();
+        JOptionPane.showMessageDialog(view, newPlayer.getFullName() + " wird ab der nächsten Runde mit 0 Punkten gepaart.");
+    }
+
+    private boolean confirm(String message, String title) {
+        return JOptionPane.showConfirmDialog(view, message, title, JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
+    }
+
+    /**
+     * Returns {@code true} if any non-bye match has no decided result (see {@link Match#isDecided()}).
+     *
+     * @param matches the matches to check
+     * @return {@code true} if the round cannot be closed yet
+     */
+    static boolean hasUnfinishedMatches(List<Match> matches) {
+        return matches.stream().anyMatch(match -> match.getSecondPlayer() != null && !match.isDecided());
+    }
+
+    /**
+     * Describes all non-bye matches without decided result, e.g. "Runde 2, Tisch 3: A – B".
+     *
+     * @param matches the matches to check (all rounds)
+     * @return one line per open match
+     */
+    static List<String> unfinishedMatchDescriptions(List<Match> matches) {
+        return matches.stream()
+                .filter(m -> m.getSecondPlayer() != null && !m.isDecided())
+                .map(m -> (m.getRound() > 0 ? "Runde " + m.getRound() + ", " : "") + "Tisch " + m.getTableNumber() + ": "
+                        + m.getFirstPlayer().getFullName() + " – " + m.getSecondPlayer().getFullName())
+                .toList();
     }
 
     /**
      * Replaces the current round's pairings with the provided match selection and updates the UI.
-     * Delegates to {@link PairingEngine#setNewMatches(List)} for state management.
      *
      * @param selectedMatches the manually selected matches to use for the current round
      */
     public void setNewMatches(List<Match> selectedMatches) {
-        String text = pairingEngine.setNewMatches(selectedMatches);
-        view.getPairingsTextArea().setText(text);
+        pairingEngine.setNewMatches(selectedMatches);
         updateResultsTable();
+        saveTournamentState();
     }
 
-    /**
-     * Opens the cross table window for the current tournament state.
-     */
     private void showCrossTable() {
-        List<Player> sorted = new ArrayList<>(playerList);
-        sortPlayers(sorted);
-        sorted = sorted.reversed();
-        new CrossTableController(sorted, pairingEngine.getAllMatches(), tournamentName, mode);
+        List<Player> ranked = currentStandings().stream().map(Standings.Entry::player).toList();
+        if (crossTable != null && crossTable.isOpen()) {
+            crossTable.refresh(ranked, countingMatches());
+            crossTable.toFront();
+        } else {
+            crossTable = new CrossTableController(view, ranked, countingMatches(), tournamentName);
+        }
+    }
+
+    private void printPlacementTable() {
+        PrintUtil.printTable(view, view.getResultsTable(), "Rangliste - " + tournamentName,
+                "Turnier: " + tournamentName + "  —  Runde " + currentRound
+                        + (pairingEngine.isFinished() ? " (Endstand)" : ""));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Rounds for result entry
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Returns the current round number.
+     *
+     * @return the current round
+     */
+    public int getCurrentRound() {
+        return currentRound;
     }
 
     /**
-     * Sends the current standings table to the printer using the system print dialog.
-     * Shows an error dialog if printing fails.
+     * Returns the rounds whose results can be entered or corrected: the current round and every
+     * earlier round whose matches are known (files from older versions have no round numbers).
+     *
+     * @return ascending round numbers
      */
-    private void printPlacementTable() {
+    public List<Integer> correctableRounds() {
+        List<Integer> rounds = new ArrayList<>();
+        for (int r = 1; r < currentRound; r++) {
+            if (!pairingEngine.getMatchesOfRound(r).isEmpty()) rounds.add(r);
+        }
+        rounds.add(currentRound);
+        return rounds;
+    }
+
+    /**
+     * Returns the matches of a round; for the current round these are the current matches.
+     *
+     * @param round the round number
+     * @return the matches
+     */
+    public List<Match> matchesOfRound(int round) {
+        return round == currentRound ? pairingEngine.getMatches() : pairingEngine.getMatchesOfRound(round);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Persistence
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Saves the current tournament state to "&lt;Turniername&gt;.ser" in the default save directory
+     * (see {@link TournamentStorage#defaultSaveDirectory()}). Called after every result entry,
+     * pairing change, round change and when the window is closed, so no entered result is lost.
+     * Shows an error dialog with the target path if the file cannot be written.
+     */
+    void saveTournamentState() {
+        writeState(TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), tournamentName));
+    }
+
+    /**
+     * Saves a backup of the state after a completed round ("…_Runde_N.ser"), right before the
+     * next round is drawn.
+     */
+    private void saveRoundBackup() {
+        writeState(TournamentStorage.saveFile(TournamentStorage.defaultSaveDirectory(), tournamentName, currentRound));
+    }
+
+    private void writeState(File file) {
         try {
-            PrinterJob job = PrinterJob.getPrinterJob();
-            job.setJobName("Rangliste - " + tournamentName);
-
-            PageFormat pageFormat = job.defaultPage();
-            pageFormat.setOrientation(PageFormat.LANDSCAPE);
-            Paper paper = pageFormat.getPaper();
-            double margin = 36;
-            paper.setImageableArea(margin, margin,
-                    paper.getWidth() - margin * 2,
-                    paper.getHeight() - margin * 2);
-            pageFormat.setPaper(paper);
-            PageFormat validated = job.validatePage(pageFormat);
-
-            java.awt.print.Printable printable = view.getResultsTable().getPrintable(
-                    JTable.PrintMode.FIT_WIDTH,
-                    new java.text.MessageFormat("Turnier: " + tournamentName + "  —  Runde " + currentRound),
-                    new java.text.MessageFormat("Seite {0}")
-            );
-            job.setPrintable(printable, validated);
-
-            if (job.printDialog()) {
-                job.print();
-            }
-        } catch (PrinterException e) {
-            JOptionPane.showMessageDialog(view, "Fehler beim Drucken.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
+            TournamentStorage.save(toState(), file);
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(view,
+                    "Fehler beim Speichern nach:\n" + file.getAbsolutePath() + "\n\n" + e.getMessage(),
+                    "Fehler", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     /**
-     * Serializes the current tournament state to a {@code .ser} file in the user's Documents
-     * folder. The file name is derived from the tournament name and the current round number.
-     * Shows an error dialog if the file cannot be written.
+     * Creates a snapshot of the current tournament state.
+     *
+     * @return the state
      */
-    private void saveTournamentState() {
-        String sanitizedName = tournamentName.replaceAll("[^a-zA-Z0-9-_.]", "_");
-        String fileName = sanitizedName + "_Runde_" + currentRound + ".ser";
-        File file = new File(new File(System.getProperty("user.home"), "Documents"), fileName);
-
-        TournamentState state = new TournamentState(
+    TournamentState toState() {
+        return new TournamentState(
                 new ArrayList<>(playerList),
                 new ArrayList<>(pairingEngine.getAllMatches()),
                 new ArrayList<>(pairingEngine.getMatches()),
@@ -337,20 +567,17 @@ public class TournamentRound {
                 pairingEngine.isFinished(),
                 tournamentName,
                 tableNumber,
-                mode
+                mode,
+                new ArrayList<>(pairingEngine.getWithdrawn()),
+                plannedRounds
         );
-
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))) {
-            out.writeObject(state);
-        } catch (IOException _) {
-            JOptionPane.showMessageDialog(view, "Fehler beim Speichern.", "Fehler", JOptionPane.ERROR_MESSAGE);
-        }
     }
 
     /**
      * Reconstructs a {@link TournamentRound} from a previously saved {@link TournamentState}.
-     * Uses {@link PairingEngine#restoreState} to replace any freshly-generated pairings with
-     * the saved match data, preventing duplicate entries in the match history.
+     *
+     * @param state the saved state
+     * @return the restored tournament
      */
     public static TournamentRound fromSavedState(TournamentState state) {
         TournamentRound round = new TournamentRound(
@@ -358,13 +585,13 @@ public class TournamentRound {
                 state.tournamentName(),
                 state.tableCount(),
                 state.mode(),
+                state.plannedRounds(),
                 true
         );
         round.currentRound = state.currentRound();
-        round.view.getCurrentRoundLabel().setText("Runde " + state.currentRound());
         round.pairingEngine.restoreState(state.allMatches(), state.matches());
+        round.pairingEngine.setWithdrawn(state.withdrawnPlayers());
         round.pairingEngine.setFinished(state.finished());
-        round.view.getPairingsTextArea().setText(round.pairingEngine.formatMatchesAsText(state.matches()));
         round.updateResultsTable();
         return round;
     }

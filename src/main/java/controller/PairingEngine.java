@@ -2,6 +2,7 @@ package controller;
 
 import model.Match;
 import model.Player;
+import model.ResultRules;
 import model.TournamentMode;
 
 import java.util.*;
@@ -12,10 +13,13 @@ import java.util.stream.IntStream;
  * Handles all pairing logic for a tournament, supporting both the Swiss System
  * and Round Robin (Jeder-gegen-Jeden) modes.
  *
- * <p>In Swiss System mode, players are paired each round using backtracking to find
- * valid pairings where no two players have already faced each other. Buchholz tiebreakers
- * and points are used to order candidates. A bye (Freilos) is assigned when the player
- * count is odd.</p>
+ * <p>In Swiss System mode, each round is paired as a whole by a minimum-cost perfect matching
+ * (no rematches; few and small score jumps; float history; upper half against lower half).
+ * A bye (Freilos) is assigned to the lowest-ranked player without a previous bye when the
+ * number of active players is odd.</p>
+ *
+ * <p>The order of {@code playerList} is the seeding order (TTR descending, ties decided by lot at
+ * the start). It is the last tie-break everywhere, so pairing and standings agree.</p>
  *
  * <p>In Round Robin mode, the circle method (Berger schedule) is used to generate one
  * complete schedule for {@code n-1} rounds, guaranteeing every player meets every other
@@ -30,6 +34,16 @@ public class PairingEngine {
     private final List<Match> allMatches;
     private Set<Player> byeList;
     private boolean finished;
+    /** Players who withdrew from the tournament; they are not paired any more. */
+    private final Set<Player> withdrawn = new HashSet<>();
+    /** Round number of the current round's matches (0 before the first pairing). */
+    private int pairedRound;
+    /** Players who floated down / up in the previous round; used to avoid identical floats. */
+    private Set<Player> previousDownfloaters = Set.of();
+    private Set<Player> previousUpfloaters = Set.of();
+    /** Players who floated down / up two rounds ago (weaker criterion than the previous round). */
+    private Set<Player> twoRoundsAgoDownfloaters = Set.of();
+    private Set<Player> twoRoundsAgoUpfloaters = Set.of();
 
     /**
      * Constructs a new PairingEngine.
@@ -86,6 +100,127 @@ public class PairingEngine {
     }
 
     /**
+     * Marks a player as withdrawn: from the next pairing on he is no longer paired. His matches
+     * so far stay in the history and keep counting.
+     *
+     * @param player the withdrawing player
+     */
+    public void withdraw(Player player) {
+        withdrawn.add(player);
+    }
+
+    /**
+     * Replaces the set of withdrawn players (used when loading a saved tournament).
+     *
+     * @param players the withdrawn players
+     */
+    public void setWithdrawn(Collection<Player> players) {
+        withdrawn.clear();
+        withdrawn.addAll(players);
+    }
+
+    /**
+     * Returns the withdrawn players.
+     *
+     * @return an unmodifiable view of the withdrawn players
+     */
+    public Set<Player> getWithdrawn() {
+        return Collections.unmodifiableSet(withdrawn);
+    }
+
+    /**
+     * Returns the players who are still in the tournament.
+     *
+     * @return the players without the withdrawn ones, in the original order
+     */
+    public List<Player> activePlayers() {
+        return playerList.stream().filter(p -> !withdrawn.contains(p)).toList();
+    }
+
+    /**
+     * Draws the next round. Unlike {@link #clearCurrentRound()} followed by
+     * {@link #generatePairings(int)}, the current round stays untouched if no further round is
+     * possible.
+     *
+     * @param round the number of the round to draw
+     * @return the pairing text, or {@code null} if no further round is possible
+     */
+    public String generateNextRound(int round) {
+        List<Match> previous = new ArrayList<>(matches);
+        matches.clear();
+        String text = generatePairings(round);
+        if (text == null) {
+            matches.clear();
+            matches.addAll(previous);
+        }
+        return text;
+    }
+
+    /**
+     * Returns {@code true} if the current round's draw can be taken back: it is not the first
+     * round, no result has been entered in it yet, and the previous round is known.
+     *
+     * @return {@code true} if {@link #undoLastRound()} is possible
+     */
+    public boolean canUndoLastRound() {
+        if (pairedRound <= 1 || matches.isEmpty()) return false;
+        boolean noResults = matches.stream()
+                .allMatch(m -> m.getSecondPlayer() == null || ResultRules.overallResult(m.getResults()).isEmpty());
+        boolean currentIsLatest = matches.stream().allMatch(m -> m.getRound() == pairedRound);
+        boolean previousKnown = allMatches.stream().anyMatch(m -> m.getRound() == pairedRound - 1);
+        return noResults && currentIsLatest && previousKnown;
+    }
+
+    /**
+     * Takes back the current round's draw: its matches are removed and the previous round becomes
+     * the current round again.
+     *
+     * @throws IllegalStateException if {@link #canUndoLastRound()} is {@code false}
+     */
+    public void undoLastRound() {
+        if (!canUndoLastRound()) {
+            throw new IllegalStateException("Die letzte Auslosung kann nicht zurückgenommen werden.");
+        }
+        Set<Match> current = Collections.newSetFromMap(new IdentityHashMap<>());
+        current.addAll(matches);
+        allMatches.removeIf(current::contains);
+        pairedRound--;
+        matches.clear();
+        allMatches.stream().filter(m -> m.getRound() == pairedRound).forEach(matches::add);
+        byeList = new HashSet<>(getPlayersWithBye(allMatches));
+        finished = false;
+    }
+
+    /**
+     * Returns the number of rounds of a Round Robin tournament with the current field.
+     *
+     * @return n-1 for an even and n for an odd number of players
+     */
+    public int roundRobinRounds() {
+        int n = playerList.size();
+        return n - 1 + (n % 2);
+    }
+
+    /**
+     * Returns the number of the round the current matches belong to.
+     *
+     * @return the round number, 0 if unknown
+     */
+    public int getPairedRound() {
+        return pairedRound;
+    }
+
+    /**
+     * Returns the matches of a given round.
+     *
+     * @param round the round number
+     * @return the matches of that round (empty for unknown rounds)
+     */
+    public List<Match> getMatchesOfRound(int round) {
+        return allMatches.stream().filter(m -> m.getRound() == round).toList();
+    }
+
+    /**
      * Clears the match list for the current round, preparing for the next round's pairings.
      */
     public void clearCurrentRound() {
@@ -106,6 +241,7 @@ public class PairingEngine {
         matches.clear();
         matches.addAll(savedMatches);
         byeList = new HashSet<>(getPlayersWithBye(allMatches));
+        pairedRound = allMatches.stream().mapToInt(Match::getRound).max().orElse(0);
     }
 
     /**
@@ -118,63 +254,225 @@ public class PairingEngine {
     public String generatePairings(int currentRound) {
         List<Integer> availableTables = IntStream.rangeClosed(1, tableNumber).boxed().collect(Collectors.toList());
 
-        if (mode == TournamentMode.ROUND_ROBIN) {
-            return generatePairingsRoundRobin(availableTables, currentRound);
-        } else {
-            return generatePairingsSwissSystem(new ArrayList<>(playerList), availableTables, currentRound);
+        String text = mode == TournamentMode.ROUND_ROBIN
+                ? generatePairingsRoundRobin(availableTables, currentRound)
+                : generatePairingsSwissSystem(new ArrayList<>(activePlayers()), availableTables, currentRound);
+        if (text != null) {
+            pairedRound = currentRound;
+            stampPairingInfo();
+        }
+        return text;
+    }
+
+    /**
+     * Stores the round number and the players' current points in every match of the current round.
+     * The points are the standings before the round, because results of this round are not entered yet.
+     */
+    private void stampPairingInfo() {
+        for (Match m : matches) {
+            m.setPairingInfo(pairedRound, m.getFirstPlayer().getPoints(),
+                    m.getSecondPlayer() == null ? 0 : m.getSecondPlayer().getPoints());
         }
     }
 
     /**
+     * Returns the players who floated down (including a bye) or up in the given round.
+     *
+     * @param round the round number
+     * @param down  {@code true} for downfloaters, {@code false} for upfloaters
+     * @return the set of players; empty for unknown rounds
+     */
+    public Set<Player> floatersOfRound(int round, boolean down) {
+        Set<Player> result = new HashSet<>();
+        if (round <= 0) return result;
+        for (Match m : allMatches) {
+            if (m.getRound() != round) continue;
+            for (Player p : new Player[]{m.getFirstPlayer(), m.getSecondPlayer()}) {
+                if (p != null && (down ? m.isDownfloatFor(p) : m.isUpfloatFor(p))) {
+                    result.add(p);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * Generates Swiss System pairings for the current round.
-     * Assigns a bye if the player count is odd, then uses backtracking to find valid pairings.
-     * Falls back to a force-pairing strategy if backtracking yields no valid result.
+     * If the player count is odd, the bye goes to the lowest-ranked player without a previous bye
+     * for whom the remaining players can still be paired without rematches; the next candidates are
+     * tried in ranking order. Pairings are found by backtracking. Falls back to a force-pairing
+     * strategy only if no bye candidate leads to a valid result.
      *
      * @param sortedList      the player list to pair, sorted by ranking
      * @param availableTables the pool of table numbers to assign
      * @return formatted pairing text, or {@code null} if no valid pairings exist
      */
     private String generatePairingsSwissSystem(List<Player> sortedList, List<Integer> availableTables, int currentRound) {
-        sortPlayersByRanking(sortedList, mode);
-        Player byePlayer = null;
-
-        if (playerList.size() % 2 != 0) {
-            byePlayer = assignByePlayer(sortedList);
-            if (byePlayer == null) {
-                return forcePairing(availableTables);
-            }
+        if (sortedList.size() < 2) {
+            finished = true;
+            return null;
         }
+        sortByRanking(sortedList);
+        // Rebuild from the match history so manual changes (MatchManager) are always respected
+        byeList = new HashSet<>(getPlayersWithBye(allMatches));
+        previousDownfloaters = floatersOfRound(currentRound - 1, true);
+        previousUpfloaters = floatersOfRound(currentRound - 1, false);
+        twoRoundsAgoDownfloaters = floatersOfRound(currentRound - 2, true);
+        twoRoundsAgoUpfloaters = floatersOfRound(currentRound - 2, false);
 
         Set<String> playedPairs = allMatches.stream()
                 .filter(m -> m.getSecondPlayer() != null)
                 .map(m -> createCanonicalPairing(m.getFirstPlayer(), m.getSecondPlayer()))
                 .collect(Collectors.toSet());
 
-        List<Player> orderedPlayers = new ArrayList<>(sortedList);
-        if (currentRound == 1) {
-            orderedPlayers.sort(Comparator.comparingInt(Player::getTtr).reversed());
-        } else {
-            Collections.reverse(orderedPlayers);
-        }
+        // Odd field: try bye candidates from the lowest-ranked upwards until the rest can be paired.
+        // Even field: a single attempt without bye (represented by null).
+        List<Player> byeCandidates = sortedList.size() % 2 != 0
+                ? sortedList.stream().filter(p -> !byeList.contains(p)).toList()
+                : Collections.singletonList(null);
 
-        List<Match> swissPairings = new ArrayList<>();
-        if (backtrackSwissPairing(orderedPlayers, new HashSet<>(), swissPairings, playedPairs, currentRound)) {
-            for (Match match : swissPairings) {
-                if (availableTables.isEmpty()) {
-                    availableTables = IntStream.rangeClosed(1, tableNumber).boxed().collect(Collectors.toList());
-                }
-                match.setTable(availableTables.removeFirst());
-                matches.add(match);
-                allMatches.add(match);
+        for (Player byePlayer : byeCandidates) {
+            List<Player> orderedPlayers = new ArrayList<>(sortedList);
+            if (byePlayer != null) {
+                orderedPlayers.remove(byePlayer);
             }
-            return formatMatchesAsText(matches);
+            // best first; in round 1 everybody has 0 points, so this is the seeding order
+            Collections.reverse(orderedPlayers);
+
+            List<Match> swissPairings;
+            try {
+                swissPairings = optimalSwissPairing(orderedPlayers, playedPairs);
+            } catch (ArithmeticException tooLargeForExactWeights) {
+                swissPairings = greedySwissPairing(orderedPlayers, playedPairs, currentRound);
+            }
+            if (swissPairings != null) {
+                if (byePlayer != null) {
+                    addByeMatch(byePlayer);
+                }
+                for (Match match : swissPairings) {
+                    if (availableTables.isEmpty()) {
+                        availableTables = IntStream.rangeClosed(1, tableNumber).boxed().collect(Collectors.toList());
+                    }
+                    match.setTable(availableTables.removeFirst());
+                    matches.add(match);
+                    allMatches.add(match);
+                }
+                return formatMatchesAsText(matches);
+            }
         }
 
-        if (byePlayer != null) {
-            byeList.remove(byePlayer);
-            removeLastByeMatch(byePlayer);
+        // no rematch-free pairing exists (for any allowed bye): the tournament is over
+        finished = true;
+        return null;
+    }
+
+    /**
+     * Finds the best pairing of the round as a whole (no rematches), by minimum-cost perfect
+     * matching. The cost of a pairing is compared level by level; a lower level only decides
+     * between pairings that are equal on all higher levels:
+     *
+     * <ol>
+     *   <li>Floaters: sum of the squared point differences of all pairs. Keeps as many players as
+     *       possible in their score group and avoids large jumps.</li>
+     *   <li>Float history, previous round: number of players who would float down again (a bye
+     *       counts as downfloat) or up again.</li>
+     *   <li>Float history, two rounds ago: the same for the round before.</li>
+     *   <li>Who floats: the lowest-ranked player of the higher group floats down and meets the
+     *       highest-ranked player of the lower group.</li>
+     *   <li>Pairing order inside a score group: upper half against lower half (1-5, 2-6, ...);
+     *       deviations inside the lower half are cheaper than pairing two players of the same
+     *       half.</li>
+     * </ol>
+     *
+     * @param players     the players of the round (without bye) in ranking order, best first
+     * @param playedPairs canonical keys of pairs that have already played each other
+     * @return the pairings, or {@code null} if no rematch-free pairing exists
+     * @throws ArithmeticException if the field is too large for exact integer weights
+     */
+    private List<Match> optimalSwissPairing(List<Player> players, Set<String> playedPairs) {
+        int m = players.size();
+        if (m == 0) return new ArrayList<>();
+
+        Map<Integer, Integer> groupSize = new HashMap<>();
+        int[] pos = new int[m];
+        for (int i = 0; i < m; i++) {
+            int pts = players.get(i).getPoints();
+            int count = groupSize.getOrDefault(pts, 0);
+            pos[i] = count;
+            groupSize.put(pts, count + 1);
         }
-        return forcePairing(availableTables);
+
+        // Upper bounds of the level sums, so that a lower level can never outweigh a higher one
+        long u2 = m + 1L;
+        long u3 = m + 1L;
+        long u4 = (long) m * m + 1;
+        long u5 = (long) m * m + 1;
+
+        List<int[]> edges = new ArrayList<>();
+        List<Long> costs = new ArrayList<>();
+        long maxCost = 0;
+        for (int i = 0; i < m; i++) {
+            for (int j = i + 1; j < m; j++) {
+                Player a = players.get(i);
+                Player b = players.get(j);
+                if (playedPairs.contains(createCanonicalPairing(a, b))) continue;
+
+                long l1 = 0, l2 = 0, l3 = 0, l4 = 0, l5 = 0;
+                int hi = a.getPoints() >= b.getPoints() ? i : j;
+                int lo = hi == i ? j : i;
+                Player high = players.get(hi);
+                Player low = players.get(lo);
+                int d = high.getPoints() - low.getPoints();
+                if (d == 0) {
+                    int g = groupSize.get(high.getPoints());
+                    int half = g / 2;
+                    int pu = Math.min(pos[i], pos[j]);
+                    int pv = Math.max(pos[i], pos[j]);
+                    l5 = (pu < half && pv >= half) ? Math.abs(pv - (pu + half)) : g + Math.abs(pv - pu - half);
+                } else {
+                    l1 = (long) d * d;
+                    l2 = (previousDownfloaters.contains(high) ? 1 : 0) + (previousUpfloaters.contains(low) ? 1 : 0);
+                    l3 = (twoRoundsAgoDownfloaters.contains(high) ? 1 : 0) + (twoRoundsAgoUpfloaters.contains(low) ? 1 : 0);
+                    l4 = (groupSize.get(high.getPoints()) - 1 - pos[hi]) + pos[lo];
+                }
+                long cost = Math.addExact(Math.multiplyExact(l1, u2), l2);
+                cost = Math.addExact(Math.multiplyExact(cost, u3), l3);
+                cost = Math.addExact(Math.multiplyExact(cost, u4), l4);
+                cost = Math.addExact(Math.multiplyExact(cost, u5), l5);
+                edges.add(new int[]{i, j});
+                costs.add(cost);
+                maxCost = Math.max(maxCost, cost);
+            }
+        }
+
+        // maximum weight among perfect matchings == minimum cost
+        long base = Math.addExact(maxCost, 1);
+        Math.multiplyExact(base, 4L * m); // dual variables and slacks must stay within long range
+        long[] weights = new long[costs.size()];
+        for (int k = 0; k < weights.length; k++) weights[k] = base - costs.get(k);
+
+        int[] mate = WeightedMatching.maxWeightMatching(m, edges.toArray(new int[0][]), weights, true);
+        List<Match> result = new ArrayList<>();
+        for (int i = 0; i < m; i++) {
+            if (mate[i] < 0) return null; // no perfect matching without rematches
+            if (i < mate[i]) result.add(new Match(players.get(i), players.get(mate[i]), -1));
+        }
+        return result;
+    }
+
+    /**
+     * Fallback for fields too large for {@link #optimalSwissPairing}: greedy pairing from the top
+     * with look-ahead and backtracking.
+     *
+     * @return the pairings, or {@code null} if no rematch-free pairing exists
+     */
+    private List<Match> greedySwissPairing(List<Player> players, Set<String> playedPairs, int currentRound) {
+        MatchingOracle oracle = new MatchingOracle(players, playedPairs);
+        if (!oracle.hasPerfectMatching(oracle.unpaired(Set.of()))) {
+            return null;
+        }
+        List<Match> result = new ArrayList<>();
+        return backtrackSwissPairing(players, new HashSet<>(), result, oracle, currentRound) ? result : null;
     }
 
     /**
@@ -189,20 +487,20 @@ public class PairingEngine {
      * @return {@code true} if a complete valid pairing was found, {@code false} otherwise
      */
     private boolean backtrackSwissPairing(List<Player> players, Set<Player> paired, List<Match> result,
-                                           Set<String> playedPairs, int currentRound) {
+                                           MatchingOracle oracle, int currentRound) {
         Player current = players.stream()
                 .filter(p -> !paired.contains(p))
                 .findFirst()
                 .orElse(null);
         if (current == null) return true;
 
-        for (Player opponent : getSwissOrderedOpponents(current, players, paired, playedPairs, currentRound)) {
+        for (Player opponent : getSwissOrderedOpponents(current, players, paired, oracle, currentRound)) {
             paired.add(current);
             paired.add(opponent);
 
-            if (canBeFullyMatched(players, paired, playedPairs)) {
+            if (oracle.hasPerfectMatching(oracle.unpaired(paired))) {
                 result.add(new Match(current, opponent, -1));
-                if (backtrackSwissPairing(players, paired, result, playedPairs, currentRound)) {
+                if (backtrackSwissPairing(players, paired, result, oracle, currentRound)) {
                     return true;
                 }
                 result.removeLast();
@@ -215,88 +513,176 @@ public class PairingEngine {
     }
 
     /**
-     * Returns a list of valid opponents for {@code player} in the Swiss System, ordered by
-     * closeness in tournament points, then by TTR descending for deterministic tie-breaking.
-     * A player qualifies as a valid opponent if they have not yet been paired this round
+     * Returns the valid opponents for {@code player} in the order they should be tried, following
+     * the classic (FIDE Dutch) Swiss System. {@code player} is always the best-ranked player that
+     * is still unpaired in this round. A player qualifies as an opponent if they are still unpaired
      * and have never played {@code player} before.
      *
+     * <ol>
+     *   <li>Closest in tournament points first (own score group before lower groups).</li>
+     *   <li>Inside the own score group: top half against bottom half. With the group's unpaired
+     *       players in ranking order (S1, S2, ...), the first plays the first of the lower half
+     *       (1 vs 5, 2 vs 6, 3 vs 7, 4 vs 8 in a group of eight). If that opponent is not possible,
+     *       the next players of the lower half are tried first (5, 6, 7, 8), then the upper half
+     *       from the bottom up.</li>
+     *   <li>In an odd group one player floats down: the lowest-ranked one who did not float down
+     *       (or get a bye) in the previous round. The others pair as above without him.</li>
+     *   <li>From a lower score group (a player floating down): players who did not float up in the
+     *       previous round first, then the strongest according to the ranking.</li>
+     * </ol>
+     *
+     * <p>In round 1 every player has zero points, so the whole field is one score group ordered by
+     * TTR, which gives the usual "upper half against lower half" pairing.</p>
+     *
      * @param player  the player to find opponents for
-     * @param players the full player list for this round
+     * @param players the player list for this round in ranking order (best first)
      * @param paired  the set of players already paired in the current backtracking branch
+     * @param oracle  knows which players may still play each other
      * @return ordered list of eligible opponents
      */
     private List<Player> getSwissOrderedOpponents(Player player, List<Player> players, Set<Player> paired,
-                                                   Set<String> playedPairs, int currentRound) {
-        List<Player> remaining = players.stream()
-                .filter(p -> !paired.contains(p) && !p.equals(player)
-                        && !playedPairs.contains(createCanonicalPairing(player, p)))
-                .toList();
+                                                   MatchingOracle oracle, int currentRound) {
+        Map<Player, Integer> rankIndex = indexOf(players);
 
-        if (currentRound == 1) {
-            List<Player> unpaired = players.stream()
-                    .filter(p -> !paired.contains(p))
-                    .toList();
-            int groupSize = unpaired.size();
-            int targetOriginalIdx = groupSize / 2;
-            return remaining.stream()
-                    .sorted(Comparator
-                            .comparingInt((Player p) -> Math.abs(unpaired.indexOf(p) - targetOriginalIdx))
-                            .thenComparing(Comparator.comparingInt(Player::getTtr).reversed()))
-                    .toList();
-        }
-
-        List<Player> sameGroupUnpaired = players.stream()
+        // the own score group's unpaired players in ranking order; player is at index 0
+        List<Player> group = players.stream()
                 .filter(p -> !paired.contains(p) && p.getPoints() == player.getPoints())
                 .toList();
-        int groupSize = sameGroupUnpaired.size();
-        int targetOriginalIdx = groupSize - 1;
-        return remaining.stream()
+
+        // Odd group: one player has to float down. Classic choice: the lowest-ranked player who did
+        // not already float down (or get a bye) in the previous round. The group's top player only
+        // floats if he is alone.
+        Player floater = group.size() > 1 && group.size() % 2 != 0 ? chooseDownfloater(group) : null;
+        List<Player> pairingGroup = floater == null ? group
+                : group.stream().filter(p -> !p.equals(floater)).toList();
+
+        Map<Player, Integer> groupIndex = indexOf(pairingGroup);
+        int groupSize = groupIndex.size();
+        int lowerHalfStart = groupSize / 2;
+
+        return players.stream()
+                .filter(p -> !paired.contains(p) && !p.equals(player) && oracle.canPlay(player, p))
                 .sorted(Comparator
                         .comparingInt((Player p) -> Math.abs(p.getPoints() - player.getPoints()))
                         .thenComparingInt(p -> {
-                            if (p.getPoints() != player.getPoints()) return 0;
-                            return Math.abs(sameGroupUnpaired.indexOf(p) - targetOriginalIdx);
+                            Integer idx = groupIndex.get(p);
+                            if (idx != null) {
+                                // own group: lower half in order, then upper half from the bottom up
+                                return idx >= lowerHalfStart ? idx - lowerHalfStart : groupSize + (lowerHalfStart - idx);
+                            }
+                            if (p.equals(floater)) {
+                                return 2 * groupSize + 1; // the designated floater only as last resort
+                            }
+                            // lower group: prefer players who did not float up last round, then strongest first
+                            return (previousUpfloaters.contains(p) ? players.size() : 0) + rankIndex.get(p);
                         })
                         .thenComparing(Comparator.comparingInt(Player::getTtr).reversed()))
                 .toList();
     }
 
     /**
-     * Checks whether all currently unpaired players can still be matched given the set of already
-     * paired players. A player is considered matchable if at least one other unpaired player exists
-     * that they have not yet faced.
+     * Picks the player of an odd score group who floats down: the lowest-ranked player (never the
+     * group's top player) who did not float down or receive a bye in the previous round. If all of
+     * them did, the lowest-ranked player floats.
      *
-     * @param players the full player list for this round
-     * @param paired  the set of players already assigned to matches in the current branch
-     * @return {@code true} if every remaining player has at least one valid opponent
+     * @param group the group's unpaired players in ranking order (best first)
+     * @return the player who should float down
      */
-    private boolean canBeFullyMatched(List<Player> players, Set<Player> paired, Set<String> playedPairs) {
-        List<Player> remaining = players.stream()
-                .filter(p -> !paired.contains(p))
-                .collect(Collectors.toCollection(ArrayList::new));
-        for (Player player : remaining) {
-            boolean hasOpponent = remaining.stream()
-                    .anyMatch(p -> !p.equals(player) && !playedPairs.contains(createCanonicalPairing(player, p)));
-            if (!hasOpponent) return false;
+    private Player chooseDownfloater(List<Player> group) {
+        for (int i = group.size() - 1; i >= 1; i--) {
+            if (!previousDownfloaters.contains(group.get(i))) {
+                return group.get(i);
+            }
         }
-        return hasCompleteMatching(remaining, playedPairs);
+        return group.getLast();
     }
 
-    private boolean hasCompleteMatching(List<Player> remaining, Set<String> playedPairs) {
-        if (remaining.isEmpty()) return true;
-        Player first = remaining.getFirst();
-        List<Player> rest = remaining.subList(1, remaining.size());
-        for (int i = 0; i < rest.size(); i++) {
-            Player candidate = rest.get(i);
-            if (!playedPairs.contains(createCanonicalPairing(first, candidate))) {
-                List<Player> next = new ArrayList<>(rest);
-                next.remove(i);
-                if (hasCompleteMatching(next, playedPairs)) {
-                    return true;
+    private static Map<Player, Integer> indexOf(List<Player> players) {
+        Map<Player, Integer> index = new HashMap<>();
+        for (int i = 0; i < players.size(); i++) {
+            index.put(players.get(i), i);
+        }
+        return index;
+    }
+
+    /**
+     * Answers "can these players still all be paired without a rematch?" for one pairing attempt.
+     *
+     * <p>Players are indexed once and the "may play each other" relation is precomputed. Results of
+     * the perfect-matching search are cached per set of remaining players, so the backtracking does
+     * not repeat the same (potentially exponential) search over and over.</p>
+     */
+    private final class MatchingOracle {
+        private final Map<Player, Integer> index;
+        private final boolean[][] allowed;
+        private final Map<BitSet, Boolean> cache = new HashMap<>();
+        private final int size;
+
+        MatchingOracle(List<Player> players, Set<String> playedPairs) {
+            this.size = players.size();
+            this.index = PairingEngine.indexOf(players);
+            this.allowed = new boolean[size][size];
+            for (int i = 0; i < size; i++) {
+                for (int j = i + 1; j < size; j++) {
+                    boolean ok = !playedPairs.contains(createCanonicalPairing(players.get(i), players.get(j)));
+                    allowed[i][j] = ok;
+                    allowed[j][i] = ok;
                 }
             }
         }
-        return false;
+
+        boolean canPlay(Player a, Player b) {
+            Integer i = index.get(a);
+            Integer j = index.get(b);
+            return i != null && j != null && !i.equals(j) && allowed[i][j];
+        }
+
+        BitSet unpaired(Set<Player> paired) {
+            BitSet bits = new BitSet(size);
+            bits.set(0, size);
+            for (Player p : paired) {
+                Integer i = index.get(p);
+                if (i != null) bits.clear(i);
+            }
+            return bits;
+        }
+
+        boolean hasPerfectMatching(BitSet remaining) {
+            if (remaining.isEmpty()) return true;
+            if (remaining.cardinality() % 2 != 0) return false;
+            Boolean cached = cache.get(remaining);
+            if (cached != null) return cached;
+
+            // Fast reject: someone without any possible opponent
+            boolean result = true;
+            for (int i = remaining.nextSetBit(0); i >= 0 && result; i = remaining.nextSetBit(i + 1)) {
+                boolean hasOpponent = false;
+                for (int j = remaining.nextSetBit(0); j >= 0; j = remaining.nextSetBit(j + 1)) {
+                    if (allowed[i][j]) {
+                        hasOpponent = true;
+                        break;
+                    }
+                }
+                result = hasOpponent;
+            }
+
+            if (result) {
+                result = false;
+                int first = remaining.nextSetBit(0);
+                for (int j = remaining.nextSetBit(first + 1); j >= 0; j = remaining.nextSetBit(j + 1)) {
+                    if (!allowed[first][j]) continue;
+                    BitSet next = (BitSet) remaining.clone();
+                    next.clear(first);
+                    next.clear(j);
+                    if (hasPerfectMatching(next)) {
+                        result = true;
+                        break;
+                    }
+                }
+            }
+            cache.put((BitSet) remaining.clone(), result);
+            return result;
+        }
     }
 
     /**
@@ -311,11 +697,12 @@ public class PairingEngine {
         int n = playerList.size();
         int totalRounds = n - 1 + (n % 2);
 
-        if (currentRound > totalRounds) {
+        if (currentRound > totalRounds || activePlayers().size() < 2) {
             finished = true;
             return null;
         }
 
+        // Must stay exactly like this: saved tournaments rely on the same schedule after loading.
         List<Player> players = new ArrayList<>(playerList);
         players.sort(Comparator.comparing(Player::getTtr));
 
@@ -344,8 +731,9 @@ public class PairingEngine {
 
         StringBuilder pairingsText = new StringBuilder();
         for (Player[] pair : roundPairings) {
-            Player p1 = pair[0];
-            Player p2 = pair[1];
+            Player p1 = pair[0] != null && withdrawn.contains(pair[0]) ? null : pair[0];
+            Player p2 = pair[1] != null && withdrawn.contains(pair[1]) ? null : pair[1];
+            if (p1 == null && p2 == null) continue;
 
             if (p1 == null || p2 == null) {
                 Player byePlayer = (p1 == null) ? p2 : p1;
@@ -373,92 +761,40 @@ public class PairingEngine {
     }
 
     /**
-     * Fallback pairing strategy used when the standard Swiss backtracking finds no valid solution.
-     * Computes the set of all remaining unplayed pairings and selects a consistent assignment
-     * using a separate backtracking pass. Marks the tournament as finished if no valid assignment
-     * can be found.
+     * Adds a bye (Freilos) match for the given player to the current round and the match history.
      *
-     * @param availableTables the pool of table numbers to assign to matches
-     * @return formatted pairing text, or {@code null} if the tournament is finished
+     * @param byePlayer the player receiving the bye
      */
-    private String forcePairing(List<Integer> availableTables) {
-        List<Match> openMatches = calculatePairingDifference(
-                generateAllPairings(playerList), allMatches, getPlayersWithBye(allMatches));
-        List<Match> forcedMatches = selectUniquePlayerMatches(openMatches, availableTables);
-
-        if (forcedMatches == null || forcedMatches.isEmpty()) {
-            finished = true;
-            return null;
-        }
-
-        matches.clear();
-        matches.addAll(forcedMatches);
-        allMatches.addAll(forcedMatches);
-        byeList = new HashSet<>(getPlayersWithBye(allMatches));
-
-        return formatMatchesAsText(matches);
-    }
-
-    /**
-     * Selects and assigns a bye (Freilos) player for this round.
-     * Picks the lowest-ranked player who has not yet had a bye.
-     * The selected player is removed from {@code sortedList} and a bye match is added to both
-     * the current-round and full match lists.
-     *
-     * @param sortedList the ranked player list; the bye player is removed in-place
-     * @return the chosen bye player, or {@code null} if none is eligible
-     */
-    private Player assignByePlayer(List<Player> sortedList) {
-        Player byePlayer = sortedList.stream()
-                .filter(p -> !byeList.contains(p))
-                .findFirst()
-                .orElse(null);
-        if (byePlayer == null) {
-            return null;
-        }
+    private void addByeMatch(Player byePlayer) {
         Match byeMatch = new Match(byePlayer, null, -1);
         matches.add(byeMatch);
         allMatches.add(byeMatch);
-        byeList = new HashSet<>(getPlayersWithBye(allMatches));
-        sortedList.remove(byePlayer);
-        return byePlayer;
+        byeList.add(byePlayer);
     }
 
     /**
-     * Removes the most recently added bye match for the given player from both the current-round
-     * and full match lists. Used when backtracking requires a different bye assignment.
-     *
-     * @param byePlayer the player whose bye match should be removed
-     */
-    private void removeLastByeMatch(Player byePlayer) {
-        matches.stream()
-                .filter(m -> m.getFirstPlayer().equals(byePlayer) && m.getSecondPlayer() == null)
-                .findFirst()
-                .ifPresent(m -> {
-                    matches.remove(m);
-                    allMatches.remove(m);
-                });
-    }
-
-    /**
-     * Sorts players by their ranking criteria. Used for both standings display and pairing order.
+     * Sorts players by their ranking, worst first: points, Buchholz, Fein-Buchholz, set difference,
+     * ball difference, TTR, and finally the seeding order (a later seed is weaker).
      *
      * @param players the list to sort (in place)
-     * @param mode    the tournament mode
      */
-    static void sortPlayersByRanking(List<Player> players, TournamentMode mode) {
+    void sortByRanking(List<Player> players) {
+        Map<Player, Integer> seed = indexOf(playerList);
+        Comparator<Player> bySeedWeakerFirst = Comparator.comparingInt((Player p) -> seed.getOrDefault(p, Integer.MAX_VALUE)).reversed();
         if (mode == TournamentMode.SWISS) {
             players.sort(Comparator.comparing(Player::getPoints)
                     .thenComparing(Player::getBuchholz)
                     .thenComparing(Player::getFeinBuchholz)
                     .thenComparing(player -> player.getSetsWon() - player.getSetsLost())
                     .thenComparing(player -> player.getBallsWon() - player.getBallsLost())
-                    .thenComparing(Player::getTtr));
+                    .thenComparing(Player::getTtr)
+                    .thenComparing(bySeedWeakerFirst));
         } else {
             players.sort(Comparator.comparing(Player::getPoints)
                     .thenComparing(player -> player.getSetsWon() - player.getSetsLost())
                     .thenComparing(player -> player.getBallsWon() - player.getBallsLost())
-                    .thenComparing(Player::getTtr));
+                    .thenComparing(Player::getTtr)
+                    .thenComparing(bySeedWeakerFirst));
         }
     }
 
@@ -469,16 +805,22 @@ public class PairingEngine {
      * @return list of all unplayed possible pairings
      */
     public List<Match> calculateAllPossibleOpenMatches() {
+        Set<Match> currentRound = Collections.newSetFromMap(new IdentityHashMap<>());
+        currentRound.addAll(matches);
         List<Match> playedMatches = new ArrayList<>(allMatches);
-        playedMatches.removeAll(matches);
-        return calculatePairingDifference(generateAllPairings(playerList), playedMatches, getPlayersWithBye(playedMatches));
+        playedMatches.removeIf(currentRound::contains);
+        return calculatePairingDifference(generateAllPairings(activePlayers()), playedMatches, getPlayersWithBye(playedMatches));
     }
 
     /**
      * Replaces the current round's matches with the given selection and returns the display text.
      */
     public String setNewMatches(List<Match> selectedMatches) {
-        allMatches.removeAll(matches);
+        // Remove exactly the current round's match objects (identity), never an earlier match
+        // that merely has the same players (Match.equals compares the player pair)
+        Set<Match> currentRound = Collections.newSetFromMap(new IdentityHashMap<>());
+        currentRound.addAll(matches);
+        allMatches.removeIf(currentRound::contains);
         matches.clear();
 
         List<Match> byeMatches = new ArrayList<>();
@@ -503,8 +845,13 @@ public class PairingEngine {
 
         matches.addAll(normalMatches);
         allMatches.addAll(normalMatches);
+        for (Match bye : byeMatches) {
+            bye.setTable(-1);
+        }
         matches.addAll(byeMatches);
         allMatches.addAll(byeMatches);
+        byeList = new HashSet<>(getPlayersWithBye(allMatches));
+        stampPairingInfo();
 
         return formatMatchesAsText(matches);
     }
@@ -576,96 +923,6 @@ public class PairingEngine {
      */
     private boolean isByeMatchForAnyPlayer(Match match, List<Player> byePlayers) {
         return match.getSecondPlayer() == null && byePlayers.contains(match.getFirstPlayer());
-    }
-
-    /**
-     * Selects a set of matches from {@code matchList} such that every player appears in exactly
-     * one match. Table numbers are assigned to normal matches from {@code availableTables}.
-     * Returns {@code null} if no valid complete assignment covering all players is found.
-     *
-     * @param matchList       the pool of candidate matches to select from
-     * @param availableTables the pool of table numbers to assign
-     * @return a valid match assignment covering all players, or {@code null} if impossible
-     */
-    public List<Match> selectUniquePlayerMatches(List<Match> matchList, List<Integer> availableTables) {
-        List<Match> selectedMatches = new ArrayList<>();
-        Set<Player> usedPlayers = new HashSet<>();
-
-        if (backtrack(matchList, selectedMatches, usedPlayers, 0, false)) {
-            List<Integer> tables = new ArrayList<>(availableTables);
-            for (Match match : selectedMatches) {
-                if (tables.isEmpty()) {
-                    tables = new ArrayList<>(IntStream.rangeClosed(1, tableNumber).boxed().toList());
-                }
-                match.setTable(tables.removeFirst());
-            }
-
-            if (!usedPlayers.equals(new HashSet<>(playerList))) {
-                return null;
-            }
-
-            return selectedMatches;
-        }
-
-        return null;
-    }
-
-    /**
-     * Backtracking helper for {@link #selectUniquePlayerMatches}. Tries to build a valid
-     * complete match assignment from {@code matchList} starting at index {@code start}.
-     *
-     * @param matchList        the pool of candidate matches
-     * @param selectedMatches  accumulating list of selected matches
-     * @param usedPlayers      set of players already assigned to a match
-     * @param start            the current index in {@code matchList} to try
-     * @param byeMatchSelected whether a bye match has already been selected in this branch
-     * @return {@code true} if a complete valid assignment was found
-     */
-    private boolean backtrack(List<Match> matchList, List<Match> selectedMatches, Set<Player> usedPlayers,
-                               int start, boolean byeMatchSelected) {
-        if (usedPlayers.size() == playerList.size()) {
-            return true;
-        }
-
-        if (start == matchList.size()) {
-            return false;
-        }
-
-        for (int i = start; i < matchList.size(); i++) {
-            Match match = matchList.get(i);
-            Player player1 = match.getFirstPlayer();
-            Player player2 = match.getSecondPlayer();
-
-            if (player2 == null) {
-                if (!byeMatchSelected) {
-                    selectedMatches.add(match);
-                    usedPlayers.add(player1);
-
-                    if (backtrack(matchList, selectedMatches, usedPlayers, i + 1, true)) {
-                        return true;
-                    }
-
-                    selectedMatches.remove(match);
-                    usedPlayers.remove(player1);
-                }
-            } else {
-                if (!usedPlayers.contains(player1) && !usedPlayers.contains(player2)) {
-                    selectedMatches.add(match);
-                    usedPlayers.add(player1);
-                    usedPlayers.add(player2);
-
-                    if (backtrack(matchList, selectedMatches, usedPlayers, i + 1, byeMatchSelected)) {
-                        return true;
-                    }
-
-                    selectedMatches.remove(match);
-                    usedPlayers.remove(player1);
-                    usedPlayers.remove(player2);
-                }
-            }
-        }
-
-        return false;
     }
 
     /**

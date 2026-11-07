@@ -5,6 +5,9 @@ import model.Player;
 import view.MatchManagerView;
 
 import javax.swing.*;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -30,11 +33,12 @@ public class MatchManagerController {
     /**
      * Constructs a MatchManagerController.
      *
+     * @param owner The window that owns the modal dialog.
      * @param matches Set of all possible matches.
      * @param playerCount Number of players in the tournament.
      * @param tournamentRound The current tournament round.
      */
-    public MatchManagerController(Set<Match> matches, int playerCount, TournamentRound tournamentRound) {
+    public MatchManagerController(Window owner, Set<Match> matches, int playerCount, TournamentRound tournamentRound) {
         this.playerCount = playerCount;
         this.tournamentRound = tournamentRound;
 
@@ -47,7 +51,7 @@ public class MatchManagerController {
             possibleMatchesModel.addElement(match);
         }
 
-        view = new MatchManagerView(possibleMatchesModel, selectedMatchesModel, playerCount);
+        view = new MatchManagerView(owner, possibleMatchesModel, selectedMatchesModel, playerCount);
         addListeners();
     }
 
@@ -56,17 +60,29 @@ public class MatchManagerController {
      */
     private void addListeners() {
         view.getPossibleMatchesList().addMouseListener(new MouseAdapter() {
+            @Override
             public void mouseClicked(MouseEvent e) {
                 if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
-                    moveMatchToSelected();
+                    JList<Match> list = view.getPossibleMatchesList();
+                    int index = indexAtPoint(list, e.getPoint());
+                    if (index != -1) {
+                        list.setSelectedIndex(index);
+                        moveMatchToSelected();
+                    }
                 }
             }
         });
 
         view.getSelectedMatchesList().addMouseListener(new MouseAdapter() {
+            @Override
             public void mouseClicked(MouseEvent e) {
                 if (SwingUtilities.isRightMouseButton(e)) {
-                    moveMatchToPossible();
+                    JList<Match> list = view.getSelectedMatchesList();
+                    int index = indexAtPoint(list, e.getPoint());
+                    if (index != -1) {
+                        list.setSelectedIndex(index);
+                        moveMatchToPossible();
+                    }
                 }
             }
         });
@@ -76,6 +92,24 @@ public class MatchManagerController {
         view.getUpButton().addActionListener(_ -> moveMatchToPossible());
 
         view.getCommitButton().addActionListener(_ -> commitSelectedMatches());
+    }
+
+    /**
+     * Determines the list index of the cell located at the given point.
+     * Returns {@code -1} if the point does not lie inside any cell (e.g. a click
+     * into the empty area below the last entry).
+     *
+     * @param list  the list that received the mouse event
+     * @param point the mouse position in list coordinates
+     * @return the index of the cell under the point, or {@code -1} if there is none
+     */
+    private static int indexAtPoint(JList<Match> list, Point point) {
+        int index = list.locationToIndex(point);
+        if (index == -1) {
+            return -1;
+        }
+        Rectangle bounds = list.getCellBounds(index, index);
+        return bounds != null && bounds.contains(point) ? index : -1;
     }
 
     /**

@@ -63,16 +63,16 @@ public class ScoreCalculatorTest {
     }
 
     @Test
-    public void testCalculate_byeMatch_givesWinPointSetsAndBalls() {
+    public void testCalculate_byeMatch_givesPointButNoWinSetsOrBalls() {
         Match bye = new Match(p1, null, 1);
         List<Match> matches = new ArrayList<>(List.of(bye));
         ScoreCalculator calc = new ScoreCalculator(matches);
         calc.calculate(List.of(p1));
 
         assertEquals(1, p1.getPoints());
-        assertEquals(1, p1.getWins());
-        assertEquals(3, p1.getSetsWon());
-        assertEquals(33, p1.getBallsWon());
+        assertEquals(0, p1.getWins());
+        assertEquals(0, p1.getSetsWon());
+        assertEquals(0, p1.getBallsWon());
     }
 
     @Test
@@ -152,7 +152,8 @@ public class ScoreCalculatorTest {
     }
 
     @Test
-    public void testCalculate_emptySetEntriesAreSkipped() {
+    public void testCalculate_setsWithGapDoNotCountEvenIfOverallSaysDecided() {
+        // overall "3:0", but the sets have a gap and only two sets were won: not a decided match
         Match match = new Match(p1, p2, 1);
         match.setOverallResult("3:0");
         match.setResults(0, new String[]{"11", "9"});
@@ -163,8 +164,8 @@ public class ScoreCalculatorTest {
         ScoreCalculator calc = new ScoreCalculator(matches);
         calc.calculate(List.of(p1, p2));
 
-        assertEquals(22, p1.getBallsWon());
-        assertEquals(14, p1.getBallsLost());
+        assertEquals(0, p1.getPoints());
+        assertEquals(0, p1.getBallsWon());
     }
 
     @Test
@@ -176,7 +177,7 @@ public class ScoreCalculatorTest {
         calc.calculate(List.of(p1));
 
         assertEquals(1, p1.getPoints());
-        assertEquals(1, p1.getWins());
+        assertEquals(0, p1.getWins());
     }
 
     @Test
@@ -222,7 +223,7 @@ public class ScoreCalculatorTest {
     }
 
     @Test
-    public void testCalculate_byeMatchNotCountedInBuchholz() {
+    public void testCalculate_byeMatchCountsAsVirtualOpponentWithOwnPoints() {
         Match bye = new Match(p1, null, 1);
         Match m1 = matchWithResult(p1, p2, "3:0", null);
 
@@ -230,7 +231,8 @@ public class ScoreCalculatorTest {
         ScoreCalculator calc = new ScoreCalculator(matches);
         calc.calculate(List.of(p1, p2));
 
-        assertEquals(p2.getPoints(), p1.getBuchholz());
+        // real opponent p2 (0 points) + virtual opponent with p1's own 2 points
+        assertEquals(p2.getPoints() + p1.getPoints(), p1.getBuchholz());
     }
 
     @Test
@@ -305,7 +307,7 @@ public class ScoreCalculatorTest {
     }
 
     @Test
-    public void testCalculate_nonNumericSetScore_isSkipped() {
+    public void testCalculate_nonNumericSetScore_matchDoesNotCount() {
         Match match = new Match(p1, p2, 1);
         match.setOverallResult("3:0");
         match.setResults(0, new String[]{"abc", "def"});
@@ -315,8 +317,8 @@ public class ScoreCalculatorTest {
         ScoreCalculator calc = new ScoreCalculator(matches);
         calc.calculate(List.of(p1, p2));
 
-        assertEquals(22, p1.getBallsWon());
-        assertEquals(12, p1.getBallsLost());
+        assertEquals(0, p1.getPoints());
+        assertEquals(0, p1.getBallsWon());
     }
 
     @Test

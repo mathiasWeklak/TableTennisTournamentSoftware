@@ -5,7 +5,7 @@
 A Java-based desktop application for managing table tennis tournaments. Supports both the **Swiss System** and **Round-Robin** ("Jeder gegen Jeden") modes with a Swing-based GUI.
 
 - **Author**: Mathias Weklak
-- **Language**: Java 21
+- **Language**: Java 25
 - **Build Tool**: Gradle (Kotlin DSL)
 - **GUI Framework**: Java Swing
 - **License**: CC BY-NC-SA 4.0 (non-commercial use only)
@@ -21,99 +21,59 @@ src/
 ├── main/java/
 │   ├── controller/
 │   │   ├── TournamentController.java       # App entry point, player setup, file loading
-│   │   ├── TournamentRound.java            # Round UI; delegates to PairingEngine and ScoreCalculator
-│   │   ├── PairingEngine.java              # Swiss System and Round Robin pairing algorithms
-│   │   ├── ScoreCalculator.java            # Points, Buchholz, and FeinBuchholz calculation
-│   │   ├── MatchManagerController.java     # Match assignment and management
-│   │   ├── RefereeSheetsController.java    # Referee sheet generation
-│   │   └── ResultEntryController.java      # Match result input handling
+│   │   ├── TournamentRound.java            # Running tournament: rounds, undo, withdrawal, late entry, saving
+│   │   ├── PairingEngine.java              # Swiss System (optimal matching) and Round Robin (circle method)
+│   │   ├── WeightedMatching.java           # Maximum weight matching (Edmonds' blossom algorithm)
+│   │   ├── ScoreCalculator.java            # Points, sets, balls, Buchholz, Fein-Buchholz
+│   │   ├── Standings.java                  # Ranking incl. ITTF direct comparison and shared ranks
+│   │   ├── TournamentStorage.java          # Atomic save/load with deserialization filter
+│   │   ├── ResultEntryController.java      # Result entry incl. earlier rounds, unsaved-change check
+│   │   ├── MatchManagerController.java     # Manual pairing changes (Swiss)
+│   │   ├── CrossTableController.java       # Cross table, refresh and compact print
+│   │   ├── RefereeSheetsController.java    # Referee sheets (6 per page)
+│   │   ├── PlayerDialog.java               # Add/edit player dialog, duplicate name check
+│   │   ├── PrintUtil.java                  # Table printing, MessageFormat escaping
+│   │   └── ErrorHandler.java               # Error dialog and log file for uncaught exceptions
 │   ├── model/
 │   │   ├── Player.java                     # Player data model with stats
-│   │   ├── Match.java                      # Match between two players with set results
+│   │   ├── Match.java                      # Match with set results, round and float information
+│   │   ├── ResultRules.java                # Table tennis set/match rules
 │   │   └── TournamentState.java            # Serializable snapshot of tournament state
 │   ├── simulation/
 │   │   └── TournamentSimulation.java       # GUI-free simulation; drives PairingEngine directly
-│   └── view/
-│       ├── TournamentView.java             # Main setup window
-│       ├── UITheme.java                    # Shared colors, fonts, and component factory
-│       ├── MatchManagerView.java           # Match manager UI
-│       ├── RefereeSheetsView.java          # Referee sheet UI
-│       └── ResultEntryView.java            # Result entry UI
-└── test/java/
-    ├── MatchTest.java                      # Unit tests for Match
-    ├── PlayerTest.java                     # Unit tests for Player
-    ├── PairingEngineTest.java              # Unit tests for PairingEngine (Swiss + Round Robin)
-    ├── ScoreCalculatorTest.java            # Unit tests for ScoreCalculator
-    └── TournamentStateTest.java            # Unit tests for TournamentState record
+│   └── view/                               # Swing views, UITheme, WrapLayout
+└── test/java/                              # JUnit 5 tests (see below)
 ```
 
 ---
 
-## Key Classes
+## Key Rules
 
-### `model.Player`
-Represents a tournament participant. Tracks:
-- Identity: `firstName`, `lastName`, `club`, `ttr` (TTR rating)
-- Stats: `points`, `wins`, `losses`, `setsWon`, `setsLost`, `ballsWon`, `ballsLost`
-- Swiss-specific: `buchholz`, `feinBuchholz`
+### Result rule (`Match.isDecided()`)
+A match counts if its set results form a complete best-of-five match (valid sets: at least 11 points and a lead of 2; no gaps; no set after the decision). Without set entries a decided overall result ("3:1") counts. The standings, the cross table, the pairing status and the round check all use this rule.
 
-### `model.Match`
-Represents a match between two players. Contains:
-- `firstPlayer`, `secondPlayer`, `tableNumber`
-- Up to 5 set results via inner `Result` class (5×2 string array)
-- `overallResult` string
-- `evaluated` flag — prevents double-counting on reload
+### Swiss System pairing
+Each round is paired as a whole by a minimum-cost perfect matching without rematches. Cost levels: score differences, float history of the previous round, float history two rounds ago, who floats, upper half against lower half within a score group. The bye goes to the lowest-ranked player without a previous bye. The seeding order (TTR, ties by lot) is the last tie-break everywhere.
 
-### `model.TournamentState`
-A `record` implementing `Serializable`. Snapshot of the full tournament:
-- `playerList`, `allMatches`, `matches` (current round)
-- `currentRound`, `finished`, `tournamentName`, `tableCount`
-- `modus` (`true` = round-robin, `false` = Swiss system)
+### Bye (Freilos)
+- Swiss: 1 point, no win, no sets or balls; counts as a virtual opponent with the player's own points for Buchholz/Fein-Buchholz (also rounds without pairing after late entry or withdrawal)
+- Round Robin: "spielfrei", 0 points
+- Each player receives at most one bye in the Swiss System
 
-### `controller.TournamentController`
-- Application entry point (`main()`)
-- Manages player list (add/remove, sorted by TTR descending)
-- Validates tournament name and table count
-- Loads saved `.ser` tournament files via `JFileChooser`
-- Launches `TournamentRound` on start
-
----
-
-## Tournament Modes
-
-| Mode | Description |
-|------|-------------|
-| Swiss System (`modus=false`) | Pairing based on standings; supports Buchholz & Fein-Buchholz; manual seeding adjustment possible |
-| Round-Robin (`modus=true`) | Every player plays against every other player |
-
----
-
-## Ranking Criteria
-
-Rankings are updated after each round based on:
-1. Points (1 per win or bye)
-2. Wins / Losses
-3. Set ratio
-4. Ball ratio
-5. Buchholz score (Swiss only)
-6. Fein-Buchholz score (Swiss only)
+### Ranking
+- Swiss: points, Buchholz, Fein-Buchholz, set difference, ball difference
+- Round Robin: points, ITTF direct comparison among tied players (wins, sets, balls; recomputed for remaining tied subgroups), then set and ball difference
+- Players equal in all criteria share a rank
 
 ---
 
 ## Persistence
 
-- Tournament state is auto-saved as a `.ser` file at the start of each new round
-- Files are stored in the current user's **Documents** folder
-- File name is derived from the tournament name (special characters replaced)
-- Saved states can be restored via **"Turnier laden"** menu item
-
----
-
-## Bye (Freilos) Handling
-
-- Triggered when there is an odd number of players
-- The receiving player gets a **3:0 win with 33:0 balls**
-- Each player can receive **at most one bye** throughout the tournament
+- Auto-save after every result entry, pairing change, round change and on close
+- `<name>.ser` holds the current state; `<name>_Runde_N.ser` is a backup after completed round N
+- Files are stored in the user's documents folder (as reported by the OS), otherwise in the home directory
+- Writes are atomic; loading accepts only JDK base/collection classes and the model
+- Saved states can be restored via **"Turnier laden"**
 
 ---
 
@@ -121,7 +81,7 @@ Rankings are updated after each round based on:
 
 | Dependency | Version | Scope |
 |-----------|---------|-------|
-| `org.junit.jupiter:junit-jupiter` | 5.11.0-M2 | Test |
+| `org.junit.jupiter:junit-jupiter` | 5.12.0 | Test |
 
 ---
 
@@ -139,7 +99,7 @@ Rankings are updated after each round based on:
 # Output: build/libs/TableTennisTournamentSoftware.jar
 ```
 
-**Requirements**: Java 21+
+**Requirements**: Java 25
 
 ---
 
@@ -147,10 +107,13 @@ Rankings are updated after each round based on:
 
 | Test Class | Covers |
 |-----------|--------|
-| `PlayerTest` | Constructor initialization, getters/setters for all stats fields |
-| `MatchTest` | Constructor, table/result getters/setters, invalid index/data handling for `Result` inner class |
-| `PairingEngineTest` | Swiss System pairing (even/odd players, bye logic, backtracking, forcePairing), Round Robin termination, state restore, `calculatePairingDifference`, `selectUniquePlayerMatches` |
-| `ScoreCalculatorTest` | Points, wins/losses, set/ball tallying, Buchholz, FeinBuchholz, duplicate bye removal |
-| `TournamentStateTest` | Record construction and field access |
-
-Test framework: **JUnit Jupiter 5** — 113 tests total
+| `PlayerTest`, `MatchTest` | Model classes, defensive copies |
+| `ResultRulesTest` | Set and match validation |
+| `ScoreCalculatorTest`, `ScoreCalculatorRulesTest` | Points, sets, balls, Buchholz, Fein-Buchholz, only decided matches count |
+| `PairingEngineTest`, `PairingEngineRegressionTest` | Swiss and Round Robin pairing, whole simulated tournaments (no rematches, no double byes), manual changes |
+| `SwissClassicPairingTest`, `ClassicByeAndFloatTest` | Upper vs. lower half, floaters, float history, bye scoring |
+| `controller.WeightedMatchingTest` | Matching compared with brute force on random graphs |
+| `controller.StandingsAndRoundFeaturesTest`, `controller.ReviewFixesTest` | Ranking, direct comparison, withdrawal, undo, seeding, helpers |
+| `controller.TournamentStorageTest`, `controller.ControllerHelpersTest` | Saving/loading, file names, escaping, duplicate names |
+| `TournamentStateTest`, `TournamentStateRoundtripTest` | State record and serialization |
+| `view.ResultEntryViewTest` | Walkover entry |

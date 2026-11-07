@@ -10,8 +10,8 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.*;
-import java.io.ObjectInputFilter;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,6 +34,16 @@ public class TournamentController {
 
         view.getAddPlayerButton().addActionListener(_ -> addPlayer());
         view.getRemovePlayerButton().addActionListener(_ -> removePlayer());
+        view.getEditPlayerButton().addActionListener(_ -> editPlayer());
+        view.getPlayerJList().addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2
+                        && view.getPlayerJList().locationToIndex(e.getPoint()) >= 0) {
+                    editPlayer();
+                }
+            }
+        });
         view.getBeginTournamentButton().addActionListener(_ -> beginTournament());
         view.getLoadMenuItem().addActionListener(_ -> loadTournamentFromFile());
 
@@ -52,57 +62,45 @@ public class TournamentController {
      * Prompts the user for player details and validates the input.
      */
     private void addPlayer() {
-        JTextField firstNameField = new JTextField(10);
-        JTextField lastNameField = new JTextField(10);
-        JTextField clubField = new JTextField(10);
-        JTextField ttrField = new JTextField(10);
+        Player newPlayer = PlayerDialog.show(view, "Spieler hinzufügen", null, playerList);
+        if (newPlayer != null) {
+            playerList.add(newPlayer);
+            updatePlayerList();
+        }
+    }
 
-        JPanel myPanel = new JPanel();
-        myPanel.setLayout(new BoxLayout(myPanel, BoxLayout.Y_AXIS));
-        myPanel.add(new JLabel("Vorname:"));
-        myPanel.add(firstNameField);
-        myPanel.add(new JLabel("Name:"));
-        myPanel.add(lastNameField);
-        myPanel.add(new JLabel("Verein:"));
-        myPanel.add(clubField);
-        myPanel.add(new JLabel("TTR-Wert (optional):"));
-        myPanel.add(ttrField);
+    /**
+     * Edits the selected player (also by double-click on the list).
+     */
+    private void editPlayer() {
+        int selectedIndex = view.getPlayerJList().getSelectedIndex();
+        if (selectedIndex == -1) {
+            JOptionPane.showMessageDialog(view, "Bitte wählen Sie einen Spieler aus der Liste aus.");
+            return;
+        }
+        Player existing = playerList.get(selectedIndex);
+        List<Player> others = new ArrayList<>(playerList);
+        others.remove(selectedIndex);
+        Player edited = PlayerDialog.show(view, "Spieler bearbeiten", existing, others);
+        if (edited != null) {
+            playerList.set(selectedIndex, edited);
+            updatePlayerList();
+        }
+    }
 
-        int result;
-        do {
-            result = JOptionPane.showConfirmDialog(view, myPanel,
-                    "Spieler hinzufügen", JOptionPane.OK_CANCEL_OPTION);
-            if (result == JOptionPane.OK_OPTION) {
-                String firstName = firstNameField.getText().trim();
-                String lastName = lastNameField.getText().trim();
-                String club = clubField.getText().trim();
-                if (firstName.isEmpty() || lastName.isEmpty() || club.isEmpty()) {
-                    JOptionPane.showMessageDialog(view, "Bitte füllen Sie alle Pflichtfelder aus.");
-                    continue;
-                }
-                int ttr = 0;
-                try {
-                    String ttrValue = ttrField.getText().trim();
-                    if (!ttrValue.isEmpty()) {
-                        ttr = Integer.parseInt(ttrValue);
-                    }
-                    if (ttr < 0) {
-                        throw new NumberFormatException();
-                    }
-                } catch (NumberFormatException e) {
-                    JOptionPane.showMessageDialog(view, "Bitte geben Sie einen ganzzahligen positiven TTR-Wert ein oder lassen Sie das Feld leer.");
-                    continue;
-                }
-                Player newPlayer = new Player(firstName, lastName, club, ttr);
-                if (playerList.contains(newPlayer)) {
-                    JOptionPane.showMessageDialog(view, "Ein Spieler mit diesem Namen und Verein ist bereits in der Liste.");
-                    continue;
-                }
-                playerList.add(newPlayer);
-                updatePlayerList();
-                break;
-            }
-        } while (result == JOptionPane.OK_OPTION);
+    /**
+     * Returns {@code true} if a player with the same first and last name already exists.
+     * The comparison ignores case and surrounding/multiple whitespace, so "Max  Müller" and
+     * "max müller" count as the same name. Club and TTR are not considered: two players with
+     * the same name could not be told apart in pairings, result entry and printouts.
+     *
+     * @param players   the existing players
+     * @param firstName the new player's first name
+     * @param lastName  the new player's last name
+     * @return {@code true} if the name is already taken
+     */
+    static boolean isDuplicateName(List<Player> players, String firstName, String lastName) {
+        return PlayerDialog.isDuplicateName(players, firstName, lastName);
     }
 
     /**
@@ -112,8 +110,14 @@ public class TournamentController {
     private void removePlayer() {
         int selectedIndex = view.getPlayerJList().getSelectedIndex();
         if (selectedIndex != -1) {
-            playerList.remove(selectedIndex);
-            updatePlayerList();
+            Player player = playerList.get(selectedIndex);
+            int answer = JOptionPane.showConfirmDialog(view,
+                    player.getFullName() + " (" + player.getClub() + ") wirklich entfernen?",
+                    "Spieler entfernen", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (answer == JOptionPane.YES_OPTION) {
+                playerList.remove(selectedIndex);
+                updatePlayerList();
+            }
         } else {
             JOptionPane.showMessageDialog(view, "Bitte wählen Sie einen Spieler aus der Liste aus.");
         }
@@ -159,7 +163,18 @@ public class TournamentController {
         }
 
         TournamentMode mode = view.getModusField().isSelected() ? TournamentMode.ROUND_ROBIN : TournamentMode.SWISS;
-        new TournamentRound(playerList, tournamentName, tableCount, mode).setVisible(true);
+        int plannedRounds = 0;
+        String roundsText = view.getRoundCountField().getText().trim();
+        if (mode == TournamentMode.SWISS && !roundsText.isEmpty()) {
+            try {
+                plannedRounds = Integer.parseInt(roundsText);
+                if (plannedRounds <= 0) throw new NumberFormatException();
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(view, "Bitte geben Sie für die Rundenzahl eine positive ganze Zahl ein oder lassen Sie das Feld leer.");
+                return;
+            }
+        }
+        new TournamentRound(playerList, tournamentName, tableCount, mode, plannedRounds).setVisible(true);
         view.dispose();
     }
 
@@ -178,6 +193,7 @@ public class TournamentController {
      *
      */
     static void main() {
+        ErrorHandler.install();
         UITheme.applyLookAndFeel();
         SwingUtilities.invokeLater(() -> {
             TournamentView view = new TournamentView();
@@ -208,10 +224,8 @@ public class TournamentController {
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
 
-            try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
-                in.setObjectInputFilter(ObjectInputFilter.Config.createFilter(
-                        "java.lang.**;java.util.**;model.**;!*"));
-                TournamentState state = (TournamentState) in.readObject();
+            try {
+                TournamentState state = TournamentStorage.load(file);
 
                 TournamentRound round = TournamentRound.fromSavedState(state);
                 round.setVisible(true);

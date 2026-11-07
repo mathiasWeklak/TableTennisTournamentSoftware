@@ -15,7 +15,7 @@ import java.awt.*;
  *
  * <p>All interaction logic is handled by {@link controller.MatchManagerController}.</p>
  */
-public class MatchManagerView extends JFrame {
+public class MatchManagerView extends JDialog {
     private final JList<Match> possibleMatchesList;
     private final JList<Match> selectedMatchesList;
     private final JButton downButton;
@@ -25,16 +25,17 @@ public class MatchManagerView extends JFrame {
     /**
      * Constructs the match manager window.
      *
+     * @param owner                the window that owns the modal dialog
      * @param possibleMatchesModel the list model of all possible (unplayed) matches
      * @param selectedMatchesModel the list model for the currently selected matches
      * @param playerCount          the total number of players (used to compute required match count)
      */
-    public MatchManagerView(DefaultListModel<Match> possibleMatchesModel,
+    public MatchManagerView(Window owner, DefaultListModel<Match> possibleMatchesModel,
                             DefaultListModel<Match> selectedMatchesModel, int playerCount) {
-
-        setTitle("Begegnungs Manager");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(680, 750);
+        super(owner, "Begegnungs Manager", ModalityType.APPLICATION_MODAL);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        UITheme.sizeToScreen(this, 680, 750);
+        setLocationRelativeTo(owner);
         setLayout(new BorderLayout());
         getContentPane().setBackground(UITheme.BACKGROUND);
 

@@ -18,7 +18,9 @@ public class TournamentView extends JFrame {
     private final JTextField tournamentNameField;
     private final JTextField tableCountField;
     private final JCheckBox modusField;
+    private final JTextField roundCountField;
     private final JButton addPlayerButton;
+    private final JButton editPlayerButton;
     private final JButton removePlayerButton;
     private final JButton beginTournamentButton;
     private final JMenuItem loadMenuItem;
@@ -28,7 +30,7 @@ public class TournamentView extends JFrame {
      */
     public TournamentView() {
         setTitle("Tischtennis Turniersoftware");
-        setSize(780, 540);
+        UITheme.sizeToScreen(this, 780, 540);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());
@@ -73,6 +75,15 @@ public class TournamentView extends JFrame {
         modusField = new JCheckBox();
         formCard.add(modusField, gbc);
 
+        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 3;
+        formCard.add(makeLabel("Rundenzahl (Schweizer System, leer = offen):"), gbc);
+        gbc.gridx = 3; gbc.gridwidth = 1;
+        roundCountField = new JTextField(5);
+        roundCountField.setFont(UITheme.FONT_BODY);
+        roundCountField.setToolTipText("Nach dieser Runde ist das Turnier beendet. Leer lassen, um ohne feste Rundenzahl zu spielen.");
+        formCard.add(roundCountField, gbc);
+        modusField.addItemListener(_ -> roundCountField.setEnabled(!modusField.isSelected()));
+
         JPanel playerCard = new JPanel(new BorderLayout(0, 6));
         playerCard.setBackground(UITheme.BACKGROUND);
         playerCard.setBorder(new EmptyBorder(12, 16, 12, 16));
@@ -90,11 +101,13 @@ public class TournamentView extends JFrame {
         JScrollPane playerScrollPane = new JScrollPane(playerJList);
         playerInner.add(playerScrollPane, BorderLayout.CENTER);
 
-        JPanel playerBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        JPanel playerBtns = new JPanel(new WrapLayout(FlowLayout.LEFT, 8, 6));
         playerBtns.setBackground(UITheme.SURFACE);
         addPlayerButton = UITheme.createPrimaryButton("+ Spieler hinzufügen");
+        editPlayerButton = UITheme.createSecondaryButton("Spieler bearbeiten");
         removePlayerButton = UITheme.createSecondaryButton("Spieler entfernen");
         playerBtns.add(addPlayerButton);
+        playerBtns.add(editPlayerButton);
         playerBtns.add(removePlayerButton);
         playerInner.add(playerBtns, BorderLayout.SOUTH);
         playerCard.add(playerInner, BorderLayout.CENTER);
@@ -188,6 +201,24 @@ public class TournamentView extends JFrame {
      */
     public JButton getAddPlayerButton() {
         return addPlayerButton;
+    }
+
+    /**
+     * Returns the "edit player" button.
+     *
+     * @return the edit player button
+     */
+    public JButton getEditPlayerButton() {
+        return editPlayerButton;
+    }
+
+    /**
+     * Returns the field for the planned number of rounds (Swiss System only, optional).
+     *
+     * @return the round count field
+     */
+    public JTextField getRoundCountField() {
+        return roundCountField;
     }
 
     /**

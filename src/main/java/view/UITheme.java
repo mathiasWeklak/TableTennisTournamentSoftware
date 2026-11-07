@@ -48,6 +48,24 @@ public final class UITheme {
     public static final Font FONT_MONO     = new Font("Consolas", Font.PLAIN, 13);
 
     /**
+     * Sets the window size, limited to the usable screen area (without taskbar), so windows also
+     * fit on small laptop screens such as 1366x768.
+     *
+     * @param window the window
+     * @param width  the desired width
+     * @param height the desired height
+     */
+    public static void sizeToScreen(Window window, int width, int height) {
+        Rectangle usable;
+        try {
+            usable = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        } catch (HeadlessException e) {
+            usable = new Rectangle(0, 0, width, height);
+        }
+        window.setSize(Math.min(width, usable.width - 20), Math.min(height, usable.height - 20));
+    }
+
+    /**
      * Applies the Nimbus Look and Feel to the application.
      * Silently ignores any exceptions if Nimbus is unavailable.
      */

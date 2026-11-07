@@ -2,63 +2,83 @@ package controller;
 
 import model.Match;
 import model.Player;
-import model.TournamentMode;
 import view.CrossTableView;
 
-import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import java.awt.print.PageFormat;
-import java.awt.print.Paper;
-import java.awt.print.PrinterException;
-import java.awt.print.PrinterJob;
+import java.awt.Window;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Controller for the cross table (Kreuztabelle) feature.
  *
- * <p>Builds the cross table data from the list of all matches and provides print logic.</p>
+ * <p>Builds the cross table data from the list of all matches and provides print logic. The
+ * dialog can be refreshed while it is open, so results entered later appear immediately.</p>
  */
 public class CrossTableController {
 
-    private final List<Player> players;
-    private final List<Match> allMatches;
+    private List<Player> players;
+    private List<Match> allMatches;
     private final String tournamentName;
-    private final TournamentMode mode;
-    private CrossTableView view;
+    private final CrossTableView view;
 
     /**
-     * Constructs the controller and initializes the UI on the Event Dispatch Thread.
+     * Constructs the controller and shows the cross table dialog. Must be called on the EDT.
      *
+     * @param owner          the tournament window owning the dialog
      * @param players        the list of players, sorted by ranking
      * @param allMatches     all matches played across all rounds
      * @param tournamentName the name of the tournament
-     * @param mode           the tournament mode
      */
-    public CrossTableController(List<Player> players, List<Match> allMatches,
-                                String tournamentName, TournamentMode mode) {
+    public CrossTableController(Window owner, List<Player> players, List<Match> allMatches, String tournamentName) {
         this.players = new ArrayList<>(players);
         this.allMatches = new ArrayList<>(allMatches);
         this.tournamentName = tournamentName;
-        this.mode = mode;
-        SwingUtilities.invokeLater(this::initializeUI);
+        this.view = new CrossTableView(owner, this, tournamentName);
+        this.view.setVisible(true);
     }
 
-    private void initializeUI() {
-        view = new CrossTableView(this, tournamentName);
-        view.setVisible(true);
+    /**
+     * Updates the cross table with new data, if the dialog is still open.
+     *
+     * @param players    the players, sorted by ranking
+     * @param allMatches all matches
+     */
+    public void refresh(List<Player> players, List<Match> allMatches) {
+        this.players = new ArrayList<>(players);
+        this.allMatches = new ArrayList<>(allMatches);
+        if (isOpen()) {
+            view.setModel(buildTableModel(false));
+        }
+    }
+
+    /**
+     * Returns {@code true} while the dialog has not been closed.
+     *
+     * @return {@code true} if the dialog is open
+     */
+    public boolean isOpen() {
+        return view.isDisplayable();
+    }
+
+    /**
+     * Brings the open dialog to the front.
+     */
+    public void toFront() {
+        view.toFront();
     }
 
     /**
      * Builds the {@link DefaultTableModel} for the cross table.
      *
-     * <p>The first column contains the ranked player names. Columns 1..n correspond to
-     * each player by their rank number. Each cell shows the set result from the row
-     * player's perspective (e.g. "3:1"), or "-" on the diagonal, or "" if not yet played.</p>
+     * <p>The first column contains the ranked player names. Columns 1..n correspond to each player
+     * by their rank number. Each cell shows the result from the row player's perspective
+     * (e.g. "3:1"), "-" on the diagonal, or "" if not played yet.</p>
      *
+     * @param compact {@code true}: short names ("1. Müller") for printing
      * @return the populated table model
      */
-    public DefaultTableModel buildTableModel() {
+    public DefaultTableModel buildTableModel(boolean compact) {
         int n = players.size();
 
         String[] columnNames = new String[n + 1];
@@ -77,13 +97,11 @@ public class CrossTableController {
         for (int i = 0; i < n; i++) {
             Player rowPlayer = players.get(i);
             Object[] row = new Object[n + 1];
-            row[0] = (i + 1) + ". " + rowPlayer.getFullName() + " (" + rowPlayer.getClub() + ")";
+            row[0] = compact
+                    ? (i + 1) + ". " + rowPlayer.getLastName()
+                    : (i + 1) + ". " + rowPlayer.getFullName() + " (" + rowPlayer.getClub() + ")";
             for (int j = 0; j < n; j++) {
-                if (i == j) {
-                    row[j + 1] = "-";
-                } else {
-                    row[j + 1] = findResult(rowPlayer, players.get(j));
-                }
+                row[j + 1] = i == j ? "-" : findResult(rowPlayer, players.get(j));
             }
             model.addRow(row);
         }
@@ -100,17 +118,18 @@ public class CrossTableController {
      */
     private String findResult(Player rowPlayer, Player colPlayer) {
         for (Match match : allMatches) {
-            if (match.getOverallResult() == null || match.getOverallResult().isEmpty()
-                    || match.getOverallResult().equals(":")) {
+            String result = match.getOverallResult();
+            if (result == null || result.isEmpty() || result.equals(":") || match.getSecondPlayer() == null) {
                 continue;
             }
-            if (match.getFirstPlayer().equals(rowPlayer) && match.getSecondPlayer() != null
-                    && match.getSecondPlayer().equals(colPlayer)) {
-                return match.getOverallResult();
+            // decided results as "3:1"; entries that do not count yet in brackets, e.g. "(1:0)"
+            int[] sets = match.decidedSets();
+            String shown = sets != null ? sets[0] + ":" + sets[1] : result;
+            if (match.getFirstPlayer().equals(rowPlayer) && match.getSecondPlayer().equals(colPlayer)) {
+                return sets != null ? shown : "(" + shown + ")";
             }
-            if (match.getSecondPlayer() != null && match.getSecondPlayer().equals(rowPlayer)
-                    && match.getFirstPlayer().equals(colPlayer)) {
-                return reverseResult(match.getOverallResult());
+            if (match.getSecondPlayer().equals(rowPlayer) && match.getFirstPlayer().equals(colPlayer)) {
+                return sets != null ? reverseResult(shown) : "(" + reverseResult(shown) + ")";
             }
         }
         return "";
@@ -122,7 +141,7 @@ public class CrossTableController {
      * @param result the result to reverse
      * @return the reversed result, or the original if it cannot be parsed
      */
-    private String reverseResult(String result) {
+    static String reverseResult(String result) {
         String[] parts = result.split(":");
         if (parts.length == 2) {
             return parts[1] + ":" + parts[0];
@@ -131,47 +150,10 @@ public class CrossTableController {
     }
 
     /**
-     * Returns the number of players.
-     *
-     * @return the player count
-     */
-    public int getPlayerCount() {
-        return players.size();
-    }
-
-    /**
-     * Prints the cross table using the system print dialog.
+     * Prints the cross table in a compact layout using the system print dialog.
      */
     public void printCrossTable() {
-        if (view == null) {
-            return;
-        }
-        try {
-            PrinterJob job = PrinterJob.getPrinterJob();
-            job.setJobName("Kreuztabelle - " + tournamentName);
-
-            PageFormat pageFormat = job.defaultPage();
-            pageFormat.setOrientation(PageFormat.LANDSCAPE);
-            Paper paper = pageFormat.getPaper();
-            double margin = 36;
-            paper.setImageableArea(margin, margin,
-                    paper.getWidth() - margin * 2,
-                    paper.getHeight() - margin * 2);
-            pageFormat.setPaper(paper);
-            PageFormat validated = job.validatePage(pageFormat);
-
-            java.awt.print.Printable printable = view.getCrossTable().getPrintable(
-                    JTable.PrintMode.FIT_WIDTH,
-                    new java.text.MessageFormat("Kreuztabelle: " + tournamentName),
-                    new java.text.MessageFormat("Seite {0}")
-            );
-            job.setPrintable(printable, validated);
-
-            if (job.printDialog()) {
-                job.print();
-            }
-        } catch (PrinterException e) {
-            JOptionPane.showMessageDialog(view, "Fehler beim Drucken.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
-        }
+        PrintUtil.printTable(view, CrossTableView.createPrintTable(buildTableModel(true)),
+                "Kreuztabelle - " + tournamentName, "Kreuztabelle: " + tournamentName);
     }
 }
