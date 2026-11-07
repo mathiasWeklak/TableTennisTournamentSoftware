@@ -267,7 +267,7 @@ public class TournamentController {
      * Main method to start the application.
      *
      */
-    static void main() {
+    public static void main(String[] args) {
         ErrorHandler.install();
         UITheme.applyLookAndFeel();
         SwingUtilities.invokeLater(() -> {

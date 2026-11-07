@@ -1,0 +1,127 @@
+# Builds installable packages (with bundled Java runtime) for Windows, Linux and macOS.
+#
+# - Push a tag like "v1.0.0": packages are built and attached to a GitHub release.
+# - "Run workflow" in the Actions tab: packages are built and available as workflow artifacts.
+#
+# jpackage can only build packages for the system it runs on, so every system has its own job.
+# The packages are not code-signed: Windows (SmartScreen) and macOS (Gatekeeper) show a warning
+# on the first start.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            label: windows
+          - os: ubuntu-latest
+            label: linux
+          - os: macos-latest
+            label: macos-arm64
+          - os: macos-15-intel
+            label: macos-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Make Gradle wrapper executable
+        if: runner.os != 'Windows'
+        run: chmod +x gradlew
+
+      - name: Run tests
+        if: matrix.label == 'linux'
+        run: ./gradlew test --no-daemon
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(grep -m1 '^version' build.gradle.kts | sed 's/[^0-9.]//g')" >> "$GITHUB_OUTPUT"
+
+      # ---------------- Windows: portable ZIP + MSI installer ----------------
+      - name: Windows portable ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./gradlew jpackage --no-daemon
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path build/dist/TT-Turniersoftware -DestinationPath "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-windows-portable.zip"
+
+      - name: Windows MSI installer
+        if: runner.os == 'Windows'
+        continue-on-error: true   # needs the WiX Toolset of the runner image; the ZIP above works without
+        shell: pwsh
+        run: |
+          ./gradlew jpackage -PinstallerType=msi --no-daemon
+          Copy-Item build/dist/*.msi "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-windows.msi"
+
+      # ---------------- Linux: tar.gz + deb + rpm ----------------
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y rpm fakeroot
+          mkdir -p out
+          ./gradlew jpackage --no-daemon
+          tar -C build/dist -czf "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-linux-x64.tar.gz" TT-Turniersoftware
+          ./gradlew jpackage -PinstallerType=deb --no-daemon
+          cp build/dist/*.deb out/
+          ./gradlew jpackage -PinstallerType=rpm --no-daemon
+          cp build/dist/*.rpm out/
+
+      # ---------------- macOS: dmg ----------------
+      - name: macOS disk image
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p out
+          ./gradlew jpackage -PinstallerType=dmg --no-daemon
+          cp build/dist/*.dmg "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-${{ matrix.label }}.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.label }}
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    name: GitHub release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v') && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: TT-Turniersoftware ${{ github.ref_name }}
+          files: packages/*
+          body: |
+            Installierbare Pakete mit eingebauter Java-Laufzeit, kein Java nötig.
+
+            | System | Datei |
+            |---|---|
+            | Windows | `…-windows.msi` (Installer) oder `…-windows-portable.zip` (entpacken, `TT-Turniersoftware.exe` starten) |
+            | macOS (Apple Silicon / Intel) | `…-macos-arm64.dmg` / `…-macos-x64.dmg` |
+            | Linux | `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) oder `…-linux-x64.tar.gz` |
+
+            Die Pakete sind nicht signiert:
+            - **Windows:** bei der Warnung „Der Computer wurde durch Windows geschützt“ auf „Weitere Informationen“ → „Trotzdem ausführen“ klicken.
+            - **macOS:** beim ersten Start die App mit Rechtsklick → „Öffnen“ starten und bestätigen.

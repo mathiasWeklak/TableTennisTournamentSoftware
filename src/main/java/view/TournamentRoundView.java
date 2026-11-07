@@ -41,6 +41,7 @@ public class TournamentRoundView extends JFrame {
         this.tournamentName = tournamentName;
         setTitle(tournamentName);
         UITheme.sizeToScreen(this, 900, 760);
+        UITheme.applyAppIcon(this);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());

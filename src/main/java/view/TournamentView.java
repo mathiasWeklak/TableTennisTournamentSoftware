@@ -37,6 +37,7 @@ public class TournamentView extends JFrame {
     public TournamentView() {
         setTitle("Tischtennis Turniersoftware");
         UITheme.sizeToScreen(this, 820, 620);
+        UITheme.applyAppIcon(this);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());

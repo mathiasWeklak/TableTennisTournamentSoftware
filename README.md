@@ -81,9 +81,47 @@ Spieler, die in allen Kriterien gleich sind, teilen sich den Rang (z. B. 1, 2, 2
 
 ---
 
+## 💻 Installation für Anwender
+
+Unter **Releases** auf GitHub gibt es fertige Pakete mit eingebauter Java-Laufzeit, es muss kein Java installiert sein:
+
+| System | Datei | Installation |
+|---|---|---|
+| Windows | `…-windows.msi` | Doppelklick, Installer folgen; danach im Startmenü „TT-Turniersoftware“ |
+| Windows (ohne Installation) | `…-windows-portable.zip` | entpacken, `TT-Turniersoftware.exe` starten |
+| macOS | `…-macos-arm64.dmg` (Apple Silicon) / `…-macos-x64.dmg` (Intel) | öffnen, App in „Programme“ ziehen |
+| Linux | `.deb` / `.rpm` / `…-linux-x64.tar.gz` | über die Paketverwaltung installieren bzw. entpacken und `bin/TT-Turniersoftware` starten |
+
+Die Pakete sind **nicht signiert**. Beim ersten Start erscheint deshalb eine Warnung:
+- **Windows:** „Der Computer wurde durch Windows geschützt“ → „Weitere Informationen“ → „Trotzdem ausführen“
+- **macOS:** App mit Rechtsklick → „Öffnen“ starten und bestätigen
+
+---
+
+## 📦 Pakete bauen (für Entwickler)
+
+```bash
+# Paket für das aktuelle System (Ordner unter build/dist)
+./gradlew jpackage
+
+# Installer: msi (Windows, benötigt das WiX Toolset), deb/rpm (Linux), dmg (macOS)
+./gradlew jpackage -PinstallerType=msi
+```
+
+Ein Release für alle Systeme entsteht automatisch über GitHub Actions (`.github/workflows/release.yml`), sobald ein Versions-Tag gepusht wird:
+
+```bash
+git tag v1.0.0
+git push github v1.0.0
+```
+
+Das Programmsymbol wird mit `java packaging/IconGenerator.java` erzeugt.
+
+---
+
 ## ⚙️ Systemanforderungen & Ausführung
 
-- **Java-Version**: Java 25
+- **Java-Version**: Java 25 (nur zum Entwickeln; die Pakete bringen ihre eigene Java-Laufzeit mit)
 - **Empfohlene Ausführung**:
     - Direkt in einer IDE wie IntelliJ IDEA oder Eclipse
     - Oder über Gradle:

@@ -48,6 +48,21 @@ public final class UITheme {
     public static final Font FONT_MONO     = new Font("Consolas", Font.PLAIN, 13);
 
     /**
+     * Sets the application icon (table tennis bat and ball) for a window. Dialogs owned by the
+     * window show the same icon.
+     *
+     * @param window the window
+     */
+    public static void applyAppIcon(Window window) {
+        java.util.List<Image> icons = new java.util.ArrayList<>();
+        for (int size : new int[]{16, 32, 48, 64, 128, 256}) {
+            java.net.URL url = UITheme.class.getResource("/icons/app-" + size + ".png");
+            if (url != null) icons.add(new ImageIcon(url).getImage());
+        }
+        if (!icons.isEmpty()) window.setIconImages(icons);
+    }
+
+    /**
      * Sets the window size, limited to the usable screen area (without taskbar), so windows also
      * fit on small laptop screens such as 1366x768.
      *
