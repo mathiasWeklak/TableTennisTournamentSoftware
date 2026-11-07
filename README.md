@@ -3,7 +3,7 @@
 ## Übersicht
 
 **TableTennisTournamentSoftware** ist eine Java-basierte Desktop-Anwendung zur Verwaltung von Tischtennisturnieren.  
-Sie unterstützt sowohl das **Schweizer System** als auch den Modus **„Jeder gegen Jeden“** und bietet eine benutzerfreundliche Oberfläche für Spielerverwaltung, Auslosung, Ergebniseingabe und Schiedsrichterzettel.
+Sie unterstützt das **Schweizer System**, den Modus **„Jeder gegen Jeden“** sowie **Vorrunde in Gruppen mit anschließender KO-Runde**, jeweils als Einzel oder **Doppel**, und bietet eine benutzerfreundliche Oberfläche für Spielerverwaltung, Auslosung, Ergebniseingabe und Schiedsrichterzettel.
 
 ---
 
@@ -11,6 +11,8 @@ Sie unterstützt sowohl das **Schweizer System** als auch den Modus **„Jeder g
 
 - 💾 **Automatisches Speichern** nach jeder Ergebniseingabe, Setzungsänderung und Runde sowie beim Schließen
 - 🔁 **Fortsetzen unterbrochener Turniere** durch Laden gespeicherter `.ser`-Dateien
+- 🏆 **Vorrunde in Gruppen + KO-Runde** mit Turnierbaum (Anzeige und Druck) und Spiel um Platz 3
+- 👫 **Doppelkonkurrenzen**: Teilnehmer sind Paare; Setzung nach der Summe beider TTR-Werte, jede Person nur in einem Doppel
 - 👥 **Spielerverwaltung**: Hinzufügen, Bearbeiten (auch per Doppelklick), Entfernen mit Rückfrage; gleiche Vor- und Nachnamen werden abgelehnt
 - 🎲 **Setzliste**: nach TTR; bei gleichem oder fehlendem TTR entscheidet das Los
 - 📋 **Turnierablauf**: Auslosung mit Rückfrage, „Auslosung zurücknehmen“ solange noch kein Ergebnis erfasst ist, optionale Rundenzahl im Schweizer System
@@ -34,6 +36,17 @@ Die Runde wird als Ganzes optimiert (gewichtetes Matching nach Edmonds), ohne Wi
 5. Innerhalb einer Punktgruppe: obere gegen untere Hälfte (1–5, 2–6, …)
 
 Bei ungerader Spielerzahl erhält der niedrigstplatzierte Spieler ohne bisheriges Freilos das Freilos. Ist keine Runde ohne Wiederholung mehr möglich oder die geplante Rundenzahl erreicht, ist das Turnier beendet.
+
+---
+
+## 🏆 Vorrunde in Gruppen + KO-Runde
+
+- **Einstellungen:** Gruppengröße (feste Höchstgröße; geht es nicht auf, haben einige Gruppen einen Teilnehmer weniger), Anzahl Weiterkommende je Gruppe, zusätzlich die x besten Nächstplatzierten (z. B. die besten Gruppendritten)
+- **Gruppeneinteilung:** nach Setzliste im Schlangensystem (A1, B1, C1, C2, B2, A2, …)
+- **Vorrunde:** Jeder gegen Jeden in jeder Gruppe, alle Gruppen spielen parallel; Gruppentabelle mit direktem Vergleich nach ITTF
+- **Beste Nächstplatzierte:** Vergleich über die Gruppen nach Punkten pro Spiel, dann Satz- und Balldifferenz pro Spiel, dann TTR
+- **Turnierbaum:** Gruppensieger vor Gruppenzweiten vor den übrigen Weiterkommenden, jeweils nach TTR; Freilose für die Bestgesetzten; Teilnehmer derselben Gruppe treffen möglichst spät aufeinander
+- **KO-Runde:** Best of 5, Spiel um Platz 3, Endplatzierung (1–4, danach geteilte Plätze 5, 9, …); zieht sich ein Teilnehmer zurück, kommt sein Gegner kampflos weiter
 
 ---
 

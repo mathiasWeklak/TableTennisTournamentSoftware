@@ -97,7 +97,7 @@ public class RefereeSheetsController {
         if (player == null) {
             return "";
         }
-        String lastName = player.getLastName();
+        String lastName = player.getShortName();
         return lastName == null || lastName.isBlank() ? player.getFullName() : lastName;
     }
 

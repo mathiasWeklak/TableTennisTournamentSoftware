@@ -23,10 +23,12 @@ import java.util.List;
  * @param finished       whether the tournament is considered completed
  * @param tournamentName the name of the tournament
  * @param tableCount     the number of available tables for match scheduling
- * @param mode           the tournament mode (SWISS or ROUND_ROBIN)
+ * @param mode           the tournament mode
  * @param withdrawnPlayers players who withdrew; they are not paired any more ({@code null} in
  *                         files saved by older versions)
  * @param plannedRounds  planned number of rounds for the Swiss System, 0 = open end
+ * @param doubles        {@code true} for a doubles competition (participants are pairs)
+ * @param groupKo        groups and bracket of a group/knockout tournament, otherwise {@code null}
  */
 public record TournamentState(
         List<Player> playerList,
@@ -38,7 +40,9 @@ public record TournamentState(
         int tableCount,
         TournamentMode mode,
         List<Player> withdrawnPlayers,
-        int plannedRounds
+        int plannedRounds,
+        boolean doubles,
+        GroupKoState groupKo
 ) implements Serializable {
     @Serial
     private static final long serialVersionUID = 2L;
@@ -49,6 +53,16 @@ public record TournamentState(
     public TournamentState(List<Player> playerList, List<Match> allMatches, List<Match> matches, int currentRound,
                            boolean finished, String tournamentName, int tableCount, TournamentMode mode) {
         this(playerList, allMatches, matches, currentRound, finished, tournamentName, tableCount, mode, new ArrayList<>(), 0);
+    }
+
+    /**
+     * Creates a singles state without groups.
+     */
+    public TournamentState(List<Player> playerList, List<Match> allMatches, List<Match> matches, int currentRound,
+                           boolean finished, String tournamentName, int tableCount, TournamentMode mode,
+                           List<Player> withdrawnPlayers, int plannedRounds) {
+        this(playerList, allMatches, matches, currentRound, finished, tournamentName, tableCount, mode,
+                withdrawnPlayers, plannedRounds, false, null);
     }
 
     /**

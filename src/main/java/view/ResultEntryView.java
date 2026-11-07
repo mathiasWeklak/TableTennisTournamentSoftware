@@ -367,7 +367,7 @@ public class ResultEntryView extends JDialog {
         walkoverRow.add(new JLabel("Kampflos:"));
         for (boolean firstWins : new boolean[]{true, false}) {
             Player winner = firstWins ? match.getFirstPlayer() : match.getSecondPlayer();
-            JButton button = UITheme.createSecondaryButton("Sieg " + winner.getLastName());
+            JButton button = UITheme.createSecondaryButton("Sieg " + winner.getShortName());
             button.setFocusable(false);
             button.setToolTipText("Nichtantritt: trägt 3 Sätze 11:0 für " + winner.getFullName()
                     + " ein (zählt als 3:0 mit 33:0 Bällen). Danach speichern.");

@@ -8,6 +8,8 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableModel;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * View for displaying and printing the cross table (Kreuztabelle).
@@ -25,17 +27,21 @@ public class CrossTableView extends JDialog {
     private static final Color OPEN_BG = new Color(255, 243, 205);
     private static final Color DIAGONAL_BG = new Color(220, 220, 220);
 
-    private final JTable crossTable;
+    private final CrossTableController controller;
+    private final List<JTable> tables = new ArrayList<>();
+    private final JPanel tableArea = new JPanel(new BorderLayout());
+    private JTabbedPane tabs;
 
     /**
      * Constructs the cross table dialog.
      *
      * @param owner          the tournament window
-     * @param controller     the controller providing the table model and print logic
+     * @param controller     the controller providing the table models and print logic
      * @param tournamentName the name of the tournament, shown in the title
      */
     public CrossTableView(Window owner, CrossTableController controller, String tournamentName) {
         super(owner, "Kreuztabelle – " + tournamentName, ModalityType.MODELESS);
+        this.controller = controller;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         UITheme.sizeToScreen(this, 900, 500);
         setLocationRelativeTo(owner);
@@ -46,17 +52,12 @@ public class CrossTableView extends JDialog {
         contentPane.setBorder(new EmptyBorder(12, 12, 12, 12));
         setContentPane(contentPane);
 
-        crossTable = new JTable();
-        setModel(controller.buildTableModel(false));
-
-        JPanel tableCard = new JPanel(new BorderLayout());
-        tableCard.setBackground(UITheme.SURFACE);
-        tableCard.setBorder(UITheme.cardBorder("Kreuztabelle"));
-        tableCard.add(UITheme.neutralViewport(new JScrollPane(crossTable)), BorderLayout.CENTER);
-        contentPane.add(tableCard, BorderLayout.CENTER);
+        tableArea.setBackground(UITheme.BACKGROUND);
+        contentPane.add(tableArea, BorderLayout.CENTER);
+        rebuild();
 
         JButton printButton = UITheme.createPrimaryButton("Kreuztabelle drucken");
-        printButton.addActionListener(_ -> controller.printCrossTable());
+        printButton.addActionListener(_ -> controller.printCrossTable(getSelectedSection()));
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 4));
         buttonPanel.setBackground(UITheme.BACKGROUND);
@@ -65,13 +66,52 @@ public class CrossTableView extends JDialog {
     }
 
     /**
-     * Replaces the table content, e.g. after new results were entered.
-     *
-     * @param model the new cross table model
+     * Rebuilds the tables from the controller, e.g. after new results were entered. With more
+     * than one section (groups) every section gets its own tab; the selected tab is kept.
      */
-    public void setModel(TableModel model) {
-        crossTable.setModel(model);
-        configureTable(crossTable, model.getColumnCount() - 1, false);
+    public void rebuild() {
+        int selected = getSelectedSection();
+        tables.clear();
+        tableArea.removeAll();
+        int count = controller.getSectionCount();
+        tabs = count > 1 ? new JTabbedPane() : null;
+        for (int i = 0; i < count; i++) {
+            JTable table = new JTable();
+            TableModel model = controller.buildTableModel(i, false);
+            table.setModel(model);
+            configureTable(table, model.getColumnCount() - 1, false);
+            tables.add(table);
+
+            JPanel card = new JPanel(new BorderLayout());
+            card.setBackground(UITheme.SURFACE);
+            card.setBorder(UITheme.cardBorder(controller.getSectionTitle(i)));
+            card.add(UITheme.neutralViewport(new JScrollPane(table)), BorderLayout.CENTER);
+            if (tabs != null) tabs.addTab(controller.getSectionTitle(i), card); else tableArea.add(card, BorderLayout.CENTER);
+        }
+        if (tabs != null) {
+            tableArea.add(tabs, BorderLayout.CENTER);
+            if (selected < count) tabs.setSelectedIndex(selected);
+        }
+        tableArea.revalidate();
+        tableArea.repaint();
+    }
+
+    /**
+     * Returns the index of the shown section (group).
+     *
+     * @return the selected section, 0 without tabs
+     */
+    public int getSelectedSection() {
+        return tabs == null ? 0 : Math.max(0, tabs.getSelectedIndex());
+    }
+
+    /**
+     * Returns the cross table of the shown section.
+     *
+     * @return the table
+     */
+    public JTable getCrossTable() {
+        return tables.get(getSelectedSection());
     }
 
     /**
@@ -108,8 +148,15 @@ public class CrossTableView extends JDialog {
         }
         table.getTableHeader().setFont(compact ? font.deriveFont(Font.BOLD) : table.getTableHeader().getFont());
 
-        table.getColumnModel().getColumn(0).setPreferredWidth(compact ? 120 : 200);
-        table.getColumnModel().getColumn(0).setMinWidth(compact ? 80 : 160);
+        // the name column is as wide as the longest name (doubles names are long)
+        FontMetrics fm = table.getFontMetrics(font);
+        int longest = 0;
+        for (int row = 0; row < table.getRowCount(); row++) {
+            longest = Math.max(longest, fm.stringWidth(String.valueOf(table.getValueAt(row, 0))));
+        }
+        int nameWidth = Math.max(compact ? 100 : 200, longest + (compact ? 14 : 30));
+        table.getColumnModel().getColumn(0).setPreferredWidth(nameWidth);
+        table.getColumnModel().getColumn(0).setMinWidth(nameWidth);
         for (int col = 1; col <= playerCount; col++) {
             table.getColumnModel().getColumn(col).setPreferredWidth(compact ? 32 : 50);
             table.getColumnModel().getColumn(col).setMinWidth(compact ? 32 : 40);
@@ -154,12 +201,4 @@ public class CrossTableView extends JDialog {
         });
     }
 
-    /**
-     * Returns the cross table component.
-     *
-     * @return the {@link JTable} backing the cross table
-     */
-    public JTable getCrossTable() {
-        return crossTable;
-    }
 }

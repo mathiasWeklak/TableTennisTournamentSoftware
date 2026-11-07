@@ -1,5 +1,6 @@
 package controller;
 
+import model.GroupKoState;
 import model.Player;
 import model.TournamentMode;
 import model.TournamentState;
@@ -45,6 +46,15 @@ public class TournamentController {
             }
         });
         view.getBeginTournamentButton().addActionListener(_ -> beginTournament());
+        view.getDoublesBox().addActionListener(_ -> {
+            // singles and pairs cannot be mixed
+            if (!playerList.isEmpty()) {
+                view.getDoublesBox().setSelected(!view.getDoublesBox().isSelected());
+                JOptionPane.showMessageDialog(view, "Einzel und Doppel lassen sich nicht mischen.\n"
+                        + "Bitte zuerst alle Teilnehmer entfernen, um den Modus zu wechseln.");
+            }
+            view.getAddPlayerButton().setText(doubles() ? "+ Doppel hinzufügen" : "+ Spieler hinzufügen");
+        });
         view.getLoadMenuItem().addActionListener(_ -> loadTournamentFromFile());
 
         view.addWindowListener(new WindowAdapter() {
@@ -62,7 +72,8 @@ public class TournamentController {
      * Prompts the user for player details and validates the input.
      */
     private void addPlayer() {
-        Player newPlayer = PlayerDialog.show(view, "Spieler hinzufügen", null, playerList);
+        Player newPlayer = PlayerDialog.show(view, doubles() ? "Doppel hinzufügen" : "Spieler hinzufügen",
+                null, playerList, doubles());
         if (newPlayer != null) {
             playerList.add(newPlayer);
             updatePlayerList();
@@ -81,7 +92,8 @@ public class TournamentController {
         Player existing = playerList.get(selectedIndex);
         List<Player> others = new ArrayList<>(playerList);
         others.remove(selectedIndex);
-        Player edited = PlayerDialog.show(view, "Spieler bearbeiten", existing, others);
+        Player edited = PlayerDialog.show(view, doubles() ? "Doppel bearbeiten" : "Spieler bearbeiten",
+                existing, others, doubles());
         if (edited != null) {
             playerList.set(selectedIndex, edited);
             updatePlayerList();
@@ -132,7 +144,57 @@ public class TournamentController {
 
         DefaultListModel<String> playerListModel = view.getPlayerListModel();
         playerListModel.clear();
-        playerList.forEach(player -> playerListModel.addElement(player.getFullName() + " - " + player.getClub() + " - TTR: " + player.getTtr()));
+        playerList.forEach(player -> playerListModel.addElement(player.getFullName() + " - " + player.getClub() + " - TTR: "
+                + (player.isDoubles() ? player.getOwnTtr() + " + " + player.getPartnerTtr() + " = " + player.getTtr() : player.getTtr())));
+    }
+
+    private boolean doubles() {
+        return view.getDoublesBox().isSelected();
+    }
+
+    /**
+     * Validates the group/knockout settings.
+     *
+     * @param participants number of participants
+     * @param groupSize    maximum group size
+     * @param perGroup     qualifiers per group
+     * @param bestNext     best participants on the next place
+     * @return an error message, or {@code null} if valid
+     */
+    static String validateGroupSettings(int participants, int groupSize, int perGroup, int bestNext) {
+        if (groupSize < 2) return "Die Gruppengröße muss mindestens 2 sein.";
+        if (perGroup < 1) return "Aus jeder Gruppe muss mindestens ein Teilnehmer weiterkommen.";
+        if (bestNext < 0) return "Die Zahl der besten Nächstplatzierten darf nicht negativ sein.";
+        List<List<Player>> groups = GroupKnockout.assignGroups(dummies(participants), groupSize);
+        int smallest = groups.stream().mapToInt(List::size).min().orElse(0);
+        if (perGroup >= smallest) {
+            return "In der kleinsten Gruppe sind nur " + smallest + " Teilnehmer.\n"
+                    + "Es müssen weniger als " + smallest + " je Gruppe weiterkommen.";
+        }
+        if (bestNext > groups.size()) {
+            return "Es gibt nur " + groups.size() + " Gruppen, also höchstens " + groups.size() + " Nächstplatzierte.";
+        }
+        if (bestNext == groups.size()) {
+            return "Wenn alle Nächstplatzierten weiterkommen, bitte stattdessen „weiter je Gruppe“ erhöhen.";
+        }
+        if (groups.size() * perGroup + bestNext < 2) {
+            return "Für die KO-Runde müssen mindestens zwei Teilnehmer weiterkommen.";
+        }
+        return null;
+    }
+
+    private static List<Player> dummies(int n) {
+        List<Player> list = new ArrayList<>();
+        for (int i = 0; i < n; i++) list.add(new Player("P" + i, "P" + i, "-", 0));
+        return list;
+    }
+
+    private static int parseInt(String text, int fallback) {
+        try {
+            return Integer.parseInt(text.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     /**
@@ -158,11 +220,11 @@ public class TournamentController {
         }
 
         if (playerList.size() < 2) {
-            JOptionPane.showMessageDialog(view, "Bitte fügen Sie mindestens 2 Spieler hinzu.");
+            JOptionPane.showMessageDialog(view, "Bitte fügen Sie mindestens 2 Teilnehmer hinzu.");
             return;
         }
 
-        TournamentMode mode = view.getModusField().isSelected() ? TournamentMode.ROUND_ROBIN : TournamentMode.SWISS;
+        TournamentMode mode = view.getSelectedMode();
         int plannedRounds = 0;
         String roundsText = view.getRoundCountField().getText().trim();
         if (mode == TournamentMode.SWISS && !roundsText.isEmpty()) {
@@ -174,7 +236,20 @@ public class TournamentController {
                 return;
             }
         }
-        new TournamentRound(playerList, tournamentName, tableCount, mode, plannedRounds).setVisible(true);
+        GroupKoState groupKo = null;
+        if (mode == TournamentMode.GROUPS_KO) {
+            int groupSize = parseInt(view.getGroupSizeField().getText(), -1);
+            int perGroup = parseInt(view.getQualifiersField().getText(), -1);
+            String bestText = view.getBestNextField().getText().trim();
+            int bestNext = bestText.isEmpty() ? 0 : parseInt(bestText, -1);
+            String error = validateGroupSettings(playerList.size(), groupSize, perGroup, bestNext);
+            if (error != null) {
+                JOptionPane.showMessageDialog(view, error, "Gruppen-Einstellungen", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            groupKo = new GroupKoState(groupSize, perGroup, bestNext);
+        }
+        new TournamentRound(playerList, tournamentName, tableCount, mode, plannedRounds, doubles(), groupKo).setVisible(true);
         view.dispose();
     }
 

@@ -26,6 +26,7 @@ public class TournamentRoundView extends JFrame {
     private final JButton undoRoundButton;
     private final JButton printTableButton;
     private final JButton crossTableButton;
+    private final JButton bracketButton;
     private final JButton withdrawPlayerButton;
     private final JButton addPlayerButton;
     private final JButton nextRoundButton;
@@ -139,6 +140,13 @@ public class TournamentRoundView extends JFrame {
         crossTableButton = UITheme.createSecondaryButton("Kreuztabelle");
         bottomButtonPanel.add(crossTableButton);
 
+        if (mode == TournamentMode.GROUPS_KO) {
+            bracketButton = UITheme.createSecondaryButton("Turnierbaum");
+            bottomButtonPanel.add(bracketButton);
+        } else {
+            bracketButton = null;
+        }
+
         withdrawPlayerButton = UITheme.createSecondaryButton("Spieler zurückziehen");
         bottomButtonPanel.add(withdrawPlayerButton);
 
@@ -163,10 +171,29 @@ public class TournamentRoundView extends JFrame {
      * @param finished      {@code true} if the tournament is over
      */
     public void showRound(int round, int plannedRounds, boolean finished) {
-        String roundText = "Runde " + round + (plannedRounds > 0 ? " von " + plannedRounds : "");
+        showRound("Runde " + round + (plannedRounds > 0 ? " von " + plannedRounds : ""), finished);
+    }
+
+    /**
+     * Shows a round label (e.g. "Vorrunde – Runde 2 von 3" or "KO-Runde: Halbfinale") in the
+     * header and in the window title.
+     *
+     * @param roundText the label
+     * @param finished  {@code true} if the tournament is over
+     */
+    public void showRound(String roundText, boolean finished) {
         currentRoundLabel.setText(roundText);
         statusLabel.setText(finished ? "Turnier beendet" : " ");
         setTitle(tournamentName + " – " + (finished ? "beendet" : roundText));
+    }
+
+    /**
+     * Returns the button that opens the knockout bracket (group/knockout tournaments only).
+     *
+     * @return the button, or {@code null} for other formats
+     */
+    public JButton getBracketButton() {
+        return bracketButton;
     }
 
     /**

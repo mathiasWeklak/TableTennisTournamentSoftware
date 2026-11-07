@@ -143,6 +143,7 @@ public final class Standings {
             Player a = m.getFirstPlayer();
             Player b = m.getSecondPlayer();
             if (b == null || !seen.add(m) || !mini.containsKey(a) || !mini.containsKey(b)) continue;
+            if (m.getKoRound() > 0) continue; // knockout matches are no part of a group or league table
             int[] sets = m.decidedSets();
             if (sets == null) continue;
 

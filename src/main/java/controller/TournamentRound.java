@@ -1,5 +1,6 @@
 package controller;
 
+import model.GroupKoState;
 import model.Match;
 import model.Player;
 import model.ResultRules;
@@ -28,6 +29,8 @@ public class TournamentRound {
     private final TournamentMode mode;
     private final String tournamentName;
     private final int plannedRounds;
+    private final boolean doubles;
+    private BracketController bracketView;
 
     private final PairingEngine pairingEngine;
     private final ScoreCalculator scoreCalculator;
@@ -59,11 +62,28 @@ public class TournamentRound {
      */
     public TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode,
                            int plannedRounds) {
-        this(playerList, tournamentName, tableNumber, mode, plannedRounds, false);
+        this(playerList, tournamentName, tableNumber, mode, plannedRounds, false, null, false);
+    }
+
+    /**
+     * Constructs a new tournament and draws the first round.
+     *
+     * @param playerList     the participants (single players or pairs)
+     * @param tournamentName the name of the tournament
+     * @param tableNumber    the number of available tables
+     * @param mode           the tournament format
+     * @param plannedRounds  planned number of rounds (Swiss), 0 = until no pairing is possible
+     * @param doubles        {@code true} for a doubles competition
+     * @param groupKo        group settings for {@link TournamentMode#GROUPS_KO}, otherwise {@code null}
+     */
+    public TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode,
+                           int plannedRounds, boolean doubles, GroupKoState groupKo) {
+        this(playerList, tournamentName, tableNumber, mode, plannedRounds, doubles, groupKo, false);
     }
 
     private TournamentRound(List<Player> playerList, String tournamentName, int tableNumber, TournamentMode mode,
-                            int plannedRounds, boolean skipInitialPairing) {
+                            int plannedRounds, boolean doubles, GroupKoState groupKo, boolean skipInitialPairing) {
+        this.doubles = doubles;
         this.playerList = skipInitialPairing ? new ArrayList<>(playerList) : seed(playerList, new Random());
         this.tableNumber = tableNumber;
         this.mode = mode;
@@ -76,6 +96,12 @@ public class TournamentRound {
         this.scoreCalculator = new ScoreCalculator(pairingEngine.getAllMatches(), mode);
         // Round Robin: all matches of a withdrawn player are struck (live view of the withdrawn set)
         this.scoreCalculator.setAnnulledPlayers(pairingEngine.getWithdrawn());
+        if (mode == TournamentMode.GROUPS_KO && groupKo != null) {
+            // new tournament: snake distribution in seeding order; loaded tournament: saved groups
+            pairingEngine.setGroupKo(skipInitialPairing ? groupKo
+                    : new GroupKoState(groupKo.groupSize(), groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced(),
+                    GroupKnockout.assignGroups(this.playerList, groupKo.groupSize()), new ArrayList<>()));
+        }
 
         this.view = new TournamentRoundView(tournamentName, mode);
         wireActions();
@@ -112,7 +138,27 @@ public class TournamentRound {
      * @return the planned rounds (Swiss) or the Round Robin round count
      */
     int totalRounds() {
-        return mode == TournamentMode.ROUND_ROBIN ? pairingEngine.roundRobinRounds() : plannedRounds;
+        return switch (mode) {
+            case ROUND_ROBIN -> pairingEngine.roundRobinRounds();
+            case GROUPS_KO -> pairingEngine.groupRounds() + pairingEngine.knockoutRounds();
+            case SWISS -> plannedRounds;
+        };
+    }
+
+    /**
+     * Returns the text for the current round, e.g. "Runde 3 von 5", "Vorrunde – Runde 2 von 3" or
+     * "Halbfinale".
+     *
+     * @return the round label
+     */
+    String roundLabel() {
+        int total = totalRounds();
+        if (mode == TournamentMode.GROUPS_KO) {
+            int groupRounds = pairingEngine.groupRounds();
+            if (currentRound <= groupRounds) return "Vorrunde – Runde " + currentRound + " von " + groupRounds;
+            return "KO-Runde: " + GroupKnockout.roundName(currentRound - groupRounds, pairingEngine.knockoutRounds());
+        }
+        return "Runde " + currentRound + (total > 0 ? " von " + total : "");
     }
 
     private void wireActions() {
@@ -136,6 +182,9 @@ public class TournamentRound {
         });
         view.getPrintTableButton().addActionListener(_ -> printPlacementTable());
         view.getCrossTableButton().addActionListener(_ -> showCrossTable());
+        if (view.getBracketButton() != null) {
+            view.getBracketButton().addActionListener(_ -> showBracket());
+        }
         view.getNextRoundButton().addActionListener(_ -> startNextRound());
         view.getUndoRoundButton().addActionListener(_ -> undoLastRound());
         view.getWithdrawPlayerButton().addActionListener(_ -> withdrawPlayer());
@@ -168,15 +217,21 @@ public class TournamentRound {
         scoreCalculator.calculate(playerList);
         List<Standings.Entry> standings = currentStandings();
 
-        DefaultTableModel tableModel = getDefaultTableModel(standings);
+        boolean groups = mode == TournamentMode.GROUPS_KO;
+        DefaultTableModel tableModel = groups ? getGroupTableModel() : getDefaultTableModel(standings);
         view.getResultsTable().setModel(tableModel);
         UITheme.applyTableStyling(view.getResultsTable());
-        UITheme.setNameColumnWide(view.getResultsTable(), 1);
+        UITheme.setNameColumnWide(view.getResultsTable(), groups ? 2 : 1);
 
-        view.getPairingsTextArea().setText(formatPairingsWithStatus(pairingEngine.getMatches(), mode));
+        String text = formatPairingsWithStatus(pairingEngine.getMatches(), mode, pairingEngine.knockoutRounds());
+        if (groups && pairingEngine.isFinished()) text += finalPlacingText();
+        view.getPairingsTextArea().setText(text);
         view.getPairingsTextArea().setCaretPosition(0);
         if (crossTable != null && crossTable.isOpen()) {
-            crossTable.refresh(standings.stream().map(Standings.Entry::player).toList(), countingMatches());
+            crossTable.refresh(crossTableSections(standings), countingMatches());
+        }
+        if (bracketView != null && bracketView.isOpen()) {
+            bracketView.refresh(pairingEngine.getGroupKo(), pairingEngine.getAllMatches());
         }
         updateControls();
         view.validate();
@@ -199,7 +254,7 @@ public class TournamentRound {
 
     private void updateControls() {
         boolean finished = pairingEngine.isFinished();
-        view.showRound(currentRound, totalRounds(), finished);
+        view.showRound(roundLabel(), finished);
         view.getNextRoundButton().setEnabled(!finished);
         view.getUndoRoundButton().setEnabled(pairingEngine.canUndoLastRound());
         view.getWithdrawPlayerButton().setEnabled(!finished);
@@ -219,21 +274,38 @@ public class TournamentRound {
      * @return the text for the pairings area
      */
     static String formatPairingsWithStatus(List<Match> matches, TournamentMode mode) {
+        return formatPairingsWithStatus(matches, mode, 0);
+    }
+
+    /**
+     * Formats the current round's pairings with their result status; in a group/knockout tournament
+     * every line also names the group or the knockout round.
+     *
+     * @param matches   the current round's matches
+     * @param mode      the tournament mode
+     * @param koRounds  number of knockout rounds (for the round names), 0 if not relevant
+     * @return the text for the pairings area
+     */
+    static String formatPairingsWithStatus(List<Match> matches, TournamentMode mode, int koRounds) {
         StringBuilder sb = new StringBuilder();
         long open = matches.stream()
                 .filter(m -> m.getSecondPlayer() != null && !m.isDecided())
                 .count();
         for (Match m : matches) {
             Player a = m.getFirstPlayer();
+            String stage = stageLabel(m, koRounds);
             if (m.getSecondPlayer() == null) {
-                sb.append("           ").append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
-                        .append(mode == TournamentMode.ROUND_ROBIN ? "spielfrei" : "Freilos").append('\n');
+                String bye = m.getKoRound() > 0 ? "Freilos, kommt weiter"
+                        : mode == TournamentMode.SWISS ? "Freilos" : "spielfrei";
+                sb.append("           ").append(stage).append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
+                        .append(bye).append('\n');
                 continue;
             }
             Player b = m.getSecondPlayer();
             int[] sets = m.decidedSets();
             String status = sets != null ? sets[0] + ":" + sets[1] : "offen";
             sb.append(String.format("Tisch %2d: ", m.getTableNumber()))
+                    .append(stage)
                     .append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
                     .append(b.getFullName()).append(" (").append(b.getClub()).append(")   ")
                     .append(status).append('\n');
@@ -242,6 +314,61 @@ public class TournamentRound {
             sb.append('\n').append(open == 0 ? "Alle Ergebnisse erfasst." : open + " Begegnung(en) offen.");
         }
         return sb.toString();
+    }
+
+    private static String stageLabel(Match m, int koRounds) {
+        if (m.getGroupNo() > 0) return "Gruppe " + GroupKoState.groupName(m.getGroupNo()) + "  ";
+        if (m.isThirdPlace()) return "Spiel um Platz 3  ";
+        if (m.getKoRound() > 0) {
+            return (koRounds > 0 ? GroupKnockout.roundName(m.getKoRound(), koRounds) : m.getKoRound() + ". KO-Runde") + "  ";
+        }
+        return "";
+    }
+
+    private String finalPlacingText() {
+        List<Match> ko = pairingEngine.getAllMatches().stream().filter(m -> m.getKoRound() > 0).toList();
+        List<Map.Entry<Player, Integer>> placing = GroupKnockout.finalPlacing(ko, pairingEngine.knockoutRounds());
+        if (placing.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder("\n\nEndplatzierung:\n");
+        for (Map.Entry<Player, Integer> e : placing) {
+            sb.append(String.format("%3d. ", e.getValue())).append(e.getKey().getFullName())
+                    .append(" (").append(e.getKey().getClub()).append(")\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Builds the table of a group/knockout tournament: one block per group with the group rank;
+     * withdrawn participants are struck and listed at the end of their group.
+     */
+    private DefaultTableModel getGroupTableModel() {
+        DefaultTableModel tableModel = new DefaultTableModel() {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        for (String c : new String[]{"Gruppe", "Rang", "Name", "Punkte", "Spiele", "Sätze", "Bälle"}) {
+            tableModel.addColumn(c);
+        }
+        GroupKoState groupKo = pairingEngine.getGroupKo();
+        if (groupKo == null) return tableModel;
+        Set<Player> withdrawn = pairingEngine.getWithdrawn();
+        List<Match> counting = countingMatches();
+        for (int g = 0; g < groupKo.groups().size(); g++) {
+            List<Standings.Entry> entries = new ArrayList<>(
+                    Standings.compute(groupKo.groups().get(g), TournamentMode.ROUND_ROBIN, counting));
+            entries.sort(Comparator.comparing((Standings.Entry e) -> withdrawn.contains(e.player())));
+            for (Standings.Entry e : entries) {
+                Player p = e.player();
+                boolean out = withdrawn.contains(p);
+                tableModel.addRow(new Object[]{GroupKoState.groupName(g + 1), out ? "–" : e.rank(),
+                        p.getFullName() + " (" + p.getClub() + ")" + (out ? " – zurückgezogen" : ""),
+                        p.getPoints(), p.getWins() + ":" + p.getLosses(),
+                        p.getSetsWon() + ":" + p.getSetsLost(), p.getBallsWon() + ":" + p.getBallsLost()});
+            }
+        }
+        return tableModel;
     }
 
     /**
@@ -339,7 +466,9 @@ public class TournamentRound {
 
         int total = totalRounds();
         if (total > 0 && currentRound >= total) {
-            String text = mode == TournamentMode.ROUND_ROBIN
+            String text = mode == TournamentMode.GROUPS_KO
+                    ? "Das Finale ist gespielt.\nTurnier jetzt abschließen?"
+                    : mode == TournamentMode.ROUND_ROBIN
                     ? "Alle " + total + " Runden sind gespielt.\nTurnier jetzt abschließen?"
                     : "Runde " + currentRound + " war die letzte geplante Runde.\nTurnier jetzt abschließen?";
             if (confirm(text, "Turnier abschließen")) {
@@ -348,8 +477,10 @@ public class TournamentRound {
             return;
         }
 
-        if (!confirm("Runde " + currentRound + " abschließen und Runde " + (currentRound + 1) + " auslosen?",
-                "Nächste Runde")) {
+        String question = mode == TournamentMode.GROUPS_KO && currentRound == pairingEngine.groupRounds()
+                ? "Vorrunde abschließen und die KO-Runde auslosen?"
+                : "Runde " + currentRound + " abschließen und Runde " + (currentRound + 1) + " auslosen?";
+        if (!confirm(question, "Nächste Runde")) {
             return;
         }
 
@@ -360,6 +491,8 @@ public class TournamentRound {
                     ? "Es sind weniger als zwei Spieler aktiv."
                     : mode == TournamentMode.ROUND_ROBIN
                     ? "Alle Runden sind gespielt."
+                    : mode == TournamentMode.GROUPS_KO
+                    ? "Die KO-Runde ist beendet."
                     : "Es ist keine weitere Runde ohne Wiederholungsbegegnung möglich.";
             finishTournament(reason + "\nDas Turnier ist nach " + currentRound + " Runden beendet.");
             return;
@@ -398,17 +531,21 @@ public class TournamentRound {
         JComboBox<Player> box = new JComboBox<>(active.toArray(new Player[0]));
         int choice = JOptionPane.showConfirmDialog(view,
                 new Object[]{"Welcher Spieler zieht sich zurück?", box,
-                        mode == TournamentMode.ROUND_ROBIN
-                                ? "Alle seine Spiele werden gestrichen, auch die bereits gespielten.\n"
-                                + "In den restlichen Runden sind seine Gegner spielfrei."
-                                : "Bisherige Ergebnisse bleiben bestehen. Ab der nächsten Auslosung wird er nicht mehr gepaart."},
+                        switch (mode) {
+                            case ROUND_ROBIN -> "Alle seine Spiele werden gestrichen, auch die bereits gespielten.\n"
+                                    + "In den restlichen Runden sind seine Gegner spielfrei.";
+                            case GROUPS_KO -> "Vorrunde: alle seine Gruppenspiele werden gestrichen.\n"
+                                    + "KO-Runde: sein nächster Gegner kommt kampflos weiter.";
+                            case SWISS -> "Bisherige Ergebnisse bleiben bestehen. Ab der nächsten Auslosung wird er nicht mehr gepaart.";
+                        }},
                 "Spieler zurückziehen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         Player player = (Player) box.getSelectedItem();
         if (choice != JOptionPane.OK_OPTION || player == null) return;
         pairingEngine.withdraw(player);
         updateResultsTable();
         saveTournamentState();
-        boolean openMatch = mode == TournamentMode.SWISS && pairingEngine.getMatches().stream()
+        boolean openMatch = mode != TournamentMode.ROUND_ROBIN && pairingEngine.getMatches().stream()
+                .filter(m -> mode == TournamentMode.SWISS || m.getKoRound() > 0)
                 .anyMatch(m -> m.getSecondPlayer() != null
                         && (m.getFirstPlayer().equals(player) || m.getSecondPlayer().equals(player))
                         && !m.isDecided());
@@ -419,7 +556,7 @@ public class TournamentRound {
     }
 
     private void addLatePlayer() {
-        Player newPlayer = PlayerDialog.show(view, "Spieler nachmelden", null, playerList);
+        Player newPlayer = PlayerDialog.show(view, doubles ? "Doppel nachmelden" : "Spieler nachmelden", null, playerList, doubles);
         if (newPlayer == null) return;
         playerList.add(newPlayer);
         updateResultsTable();
@@ -468,18 +605,47 @@ public class TournamentRound {
     }
 
     private void showCrossTable() {
-        List<Player> ranked = currentStandings().stream().map(Standings.Entry::player).toList();
+        List<CrossTableController.Section> sections = crossTableSections(currentStandings());
         if (crossTable != null && crossTable.isOpen()) {
-            crossTable.refresh(ranked, countingMatches());
+            crossTable.refresh(sections, countingMatches());
             crossTable.toFront();
         } else {
-            crossTable = new CrossTableController(view, ranked, countingMatches(), tournamentName);
+            crossTable = new CrossTableController(view, sections, countingMatches(), tournamentName);
+        }
+    }
+
+    /**
+     * Returns the sections of the cross table: one per group in a group/knockout tournament,
+     * otherwise one with all players in ranking order.
+     */
+    private List<CrossTableController.Section> crossTableSections(List<Standings.Entry> standings) {
+        GroupKoState groupKo = pairingEngine.getGroupKo();
+        if (mode != TournamentMode.GROUPS_KO || groupKo == null) {
+            return List.of(new CrossTableController.Section("Kreuztabelle",
+                    standings.stream().map(Standings.Entry::player).toList()));
+        }
+        List<Match> counting = countingMatches();
+        List<CrossTableController.Section> sections = new ArrayList<>();
+        for (int g = 0; g < groupKo.groups().size(); g++) {
+            sections.add(new CrossTableController.Section("Gruppe " + GroupKoState.groupName(g + 1),
+                    Standings.compute(groupKo.groups().get(g), TournamentMode.ROUND_ROBIN, counting).stream()
+                            .map(Standings.Entry::player).toList()));
+        }
+        return sections;
+    }
+
+    private void showBracket() {
+        if (bracketView != null && bracketView.isOpen()) {
+            bracketView.refresh(pairingEngine.getGroupKo(), pairingEngine.getAllMatches());
+            bracketView.toFront();
+        } else {
+            bracketView = new BracketController(view, tournamentName, pairingEngine.getGroupKo(), pairingEngine.getAllMatches());
         }
     }
 
     private void printPlacementTable() {
         PrintUtil.printTable(view, view.getResultsTable(), "Rangliste - " + tournamentName,
-                "Turnier: " + tournamentName + "  —  Runde " + currentRound
+                "Turnier: " + tournamentName + "  —  " + roundLabel()
                         + (pairingEngine.isFinished() ? " (Endstand)" : ""));
     }
 
@@ -569,7 +735,9 @@ public class TournamentRound {
                 tableNumber,
                 mode,
                 new ArrayList<>(pairingEngine.getWithdrawn()),
-                plannedRounds
+                plannedRounds,
+                doubles,
+                pairingEngine.getGroupKo()
         );
     }
 
@@ -586,6 +754,8 @@ public class TournamentRound {
                 state.tableCount(),
                 state.mode(),
                 state.plannedRounds(),
+                state.doubles(),
+                state.groupKo(),
                 true
         );
         round.currentRound = state.currentRound();

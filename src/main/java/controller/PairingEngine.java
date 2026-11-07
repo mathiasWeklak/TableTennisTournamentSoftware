@@ -1,5 +1,6 @@
 package controller;
 
+import model.GroupKoState;
 import model.Match;
 import model.Player;
 import model.ResultRules;
@@ -36,6 +37,8 @@ public class PairingEngine {
     private boolean finished;
     /** Players who withdrew from the tournament; they are not paired any more. */
     private final Set<Player> withdrawn = new HashSet<>();
+    /** Groups and bracket of a group/knockout tournament (mode GROUPS_KO), otherwise null. */
+    private GroupKoState groupKo;
     /** Round number of the current round's matches (0 before the first pairing). */
     private int pairedRound;
     /** Players who floated down / up in the previous round; used to avoid identical floats. */
@@ -189,6 +192,9 @@ public class PairingEngine {
         allMatches.stream().filter(m -> m.getRound() == pairedRound).forEach(matches::add);
         byeList = new HashSet<>(getPlayersWithBye(allMatches));
         finished = false;
+        if (groupKo != null && pairedRound <= groupRounds()) {
+            groupKo.bracket().clear(); // the bracket is drawn again from the (possibly corrected) groups
+        }
     }
 
     /**
@@ -254,9 +260,11 @@ public class PairingEngine {
     public String generatePairings(int currentRound) {
         List<Integer> availableTables = IntStream.rangeClosed(1, tableNumber).boxed().collect(Collectors.toList());
 
-        String text = mode == TournamentMode.ROUND_ROBIN
-                ? generatePairingsRoundRobin(availableTables, currentRound)
-                : generatePairingsSwissSystem(new ArrayList<>(activePlayers()), availableTables, currentRound);
+        String text = switch (mode) {
+            case ROUND_ROBIN -> generatePairingsRoundRobin(availableTables, currentRound);
+            case GROUPS_KO -> generatePairingsGroupsKo(availableTables, currentRound);
+            case SWISS -> generatePairingsSwissSystem(new ArrayList<>(activePlayers()), availableTables, currentRound);
+        };
         if (text != null) {
             pairedRound = currentRound;
             stampPairingInfo();
@@ -683,6 +691,156 @@ public class PairingEngine {
             cache.put((BitSet) remaining.clone(), result);
             return result;
         }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Group stage and knockout stage
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Sets the groups (and possibly the bracket) of a group/knockout tournament.
+     *
+     * @param state the groups and configuration
+     */
+    public void setGroupKo(GroupKoState state) {
+        List<List<Player>> groups = new ArrayList<>();
+        for (List<Player> g : state.groups()) groups.add(new ArrayList<>(g));
+        this.groupKo = new GroupKoState(state.groupSize(), state.qualifiersPerGroup(), state.bestNextPlaced(),
+                groups, new ArrayList<>(state.bracket()));
+    }
+
+    /**
+     * Returns the groups and bracket of a group/knockout tournament.
+     *
+     * @return a copy of the state, or {@code null} for other modes
+     */
+    public GroupKoState getGroupKo() {
+        if (groupKo == null) return null;
+        List<List<Player>> groups = new ArrayList<>();
+        for (List<Player> g : groupKo.groups()) groups.add(new ArrayList<>(g));
+        return new GroupKoState(groupKo.groupSize(), groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced(),
+                groups, new ArrayList<>(groupKo.bracket()));
+    }
+
+    /**
+     * Number of rounds of the group stage.
+     *
+     * @return the group rounds, 0 if this is no group/knockout tournament
+     */
+    public int groupRounds() {
+        return groupKo == null ? 0 : GroupKnockout.groupRounds(groupKo.groups());
+    }
+
+    /**
+     * Number of knockout rounds: from the bracket once it exists, otherwise expected from the
+     * configuration (all qualifiers present).
+     *
+     * @return the knockout rounds, 0 if this is no group/knockout tournament
+     */
+    public int knockoutRounds() {
+        if (groupKo == null) return 0;
+        if (!groupKo.bracket().isEmpty()) return GroupKnockout.knockoutRounds(groupKo.bracket().size());
+        int expected = 0;
+        for (List<Player> g : groupKo.groups()) expected += Math.min(groupKo.qualifiersPerGroup(), g.size());
+        int nextPlaced = (int) groupKo.groups().stream().filter(g -> g.size() > groupKo.qualifiersPerGroup()).count();
+        expected += Math.min(groupKo.bestNextPlaced(), nextPlaced);
+        return GroupKnockout.knockoutRounds(GroupKnockout.bracketSize(expected));
+    }
+
+    /**
+     * Returns the group standings (best first, withdrawn participants removed). Player statistics
+     * must be up to date (the score calculator counts only group matches in this mode).
+     *
+     * @return one list per group
+     */
+    public List<List<Player>> rankedGroups() {
+        List<List<Player>> ranked = new ArrayList<>();
+        List<Match> counting = ScoreCalculator.countingMatches(allMatches, mode, withdrawn);
+        for (List<Player> g : groupKo.groups()) {
+            ranked.add(Standings.compute(g, TournamentMode.ROUND_ROBIN, counting).stream()
+                    .map(Standings.Entry::player)
+                    .filter(p -> !withdrawn.contains(p))
+                    .toList());
+        }
+        return ranked;
+    }
+
+    private String generatePairingsGroupsKo(List<Integer> availableTables, int round) {
+        int groupRounds = groupRounds();
+        List<Match> created = new ArrayList<>();
+        if (round <= groupRounds) {
+            for (int g = 0; g < groupKo.groups().size(); g++) {
+                for (Player[] pair : GroupKnockout.roundRobinPairs(groupKo.groups().get(g), round)) {
+                    Player a = pair[0] != null && withdrawn.contains(pair[0]) ? null : pair[0];
+                    Player b = pair[1] != null && withdrawn.contains(pair[1]) ? null : pair[1];
+                    if (a == null && b == null) continue;
+                    Match m = a == null ? new Match(b, null, -1) : new Match(a, b, -1);
+                    m.setGroup(g + 1);
+                    created.add(m);
+                }
+            }
+        } else {
+            int koRound = round - groupRounds;
+            if (koRound == 1 || groupKo.bracket().isEmpty()) {
+                List<List<Player>> levels = GroupKnockout.qualifiers(rankedGroups(),
+                        groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced());
+                Map<Player, Integer> groupOf = new HashMap<>();
+                for (int g = 0; g < groupKo.groups().size(); g++) {
+                    for (Player p : groupKo.groups().get(g)) groupOf.put(p, g + 1);
+                }
+                int qualified = levels.stream().mapToInt(List::size).sum();
+                if (qualified < 2) {
+                    finished = true;
+                    return null;
+                }
+                groupKo.bracket().clear();
+                groupKo.bracket().addAll(GroupKnockout.buildBracket(levels, groupOf));
+            }
+            int total = GroupKnockout.knockoutRounds(groupKo.bracket().size());
+            if (koRound > total) {
+                finished = true;
+                return null;
+            }
+            List<Match> koMatches = allMatches.stream().filter(m -> m.getKoRound() > 0).toList();
+            List<Player> entrants = GroupKnockout.entrants(groupKo.bracket(), koMatches, koRound, withdrawn);
+            List<Player[]> pairs = GroupKnockout.knockoutPairs(entrants);
+            for (int slot = 0; slot < pairs.size(); slot++) {
+                Player[] pair = pairs.get(slot);
+                if (pair == null) continue;
+                Match m = new Match(pair[0], pair[1], -1);
+                m.setKnockout(koRound, slot, false);
+                created.add(m);
+            }
+            if (koRound == total && total >= 2) {
+                // match for third place between the losers of the semi-finals
+                List<Player> losers = new ArrayList<>();
+                for (int slot = 0; slot < 2; slot++) {
+                    Match semi = GroupKnockout.find(koMatches, total - 1, slot, false);
+                    Player loser = semi == null ? null : semi.getLoser();
+                    if (loser != null && !withdrawn.contains(loser)) losers.add(loser);
+                }
+                if (losers.size() == 2) {
+                    Match third = new Match(losers.get(0), losers.get(1), -1);
+                    third.setKnockout(koRound, 0, true);
+                    created.add(third);
+                }
+            }
+        }
+        if (created.stream().noneMatch(m -> m.getSecondPlayer() != null)) {
+            finished = true;
+            return null;
+        }
+        for (Match m : created) {
+            if (m.getSecondPlayer() != null) {
+                if (availableTables.isEmpty()) {
+                    availableTables = IntStream.rangeClosed(1, tableNumber).boxed().collect(Collectors.toList());
+                }
+                m.setTable(availableTables.removeFirst());
+            }
+            matches.add(m);
+            allMatches.add(m);
+        }
+        return formatMatchesAsText(matches);
     }
 
     /**

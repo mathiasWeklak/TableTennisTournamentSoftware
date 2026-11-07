@@ -5,7 +5,13 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Represents a player participating in a table tennis tournament.
+ * Represents a participant of a table tennis tournament: a single player or, in a doubles
+ * competition, a pair of two players.
+ *
+ * <p>For a pair, the first person is stored in the regular fields and the partner in the
+ * {@code partner*} fields. Names and clubs are then displayed as "A / B", the TTR value used for
+ * seeding is the sum of both. All tournament logic works on participants and does not need to
+ * know whether it is a single player or a pair.</p>
  */
 public class Player implements Serializable {
     @Serial
@@ -14,6 +20,11 @@ public class Player implements Serializable {
     private final String lastName;
     private final String club;
     private final int ttr;
+    // partner of a doubles pair; null for a single player (also in files of older versions)
+    private final String partnerFirstName;
+    private final String partnerLastName;
+    private final String partnerClub;
+    private final int partnerTtr;
     private int points;
     private int buchholz;
     private int feinBuchholz;
@@ -33,6 +44,24 @@ public class Player implements Serializable {
      * @param ttr       the TTR (Table Tennis Rating) value of the player
      */
     public Player(String firstName, String lastName, String club, int ttr) {
+        this(firstName, lastName, club, ttr, null, null, null, 0);
+    }
+
+    /**
+     * Creates a doubles pair.
+     *
+     * @param first  the first person of the pair (stats are ignored)
+     * @param second the partner (stats are ignored)
+     * @return the pair as one participant
+     */
+    public static Player pair(Player first, Player second) {
+        if (first.isDoubles() || second.isDoubles()) throw new IllegalArgumentException("pair of pairs");
+        return new Player(first.firstName, first.lastName, first.club, first.ttr,
+                second.firstName, second.lastName, second.club, second.ttr);
+    }
+
+    private Player(String firstName, String lastName, String club, int ttr,
+                   String partnerFirstName, String partnerLastName, String partnerClub, int partnerTtr) {
         if (firstName == null || firstName.isBlank()) throw new IllegalArgumentException("firstName must not be blank");
         if (lastName == null || lastName.isBlank()) throw new IllegalArgumentException("lastName must not be blank");
         if (club == null || club.isBlank()) throw new IllegalArgumentException("club must not be blank");
@@ -41,6 +70,16 @@ public class Player implements Serializable {
         this.lastName = lastName;
         this.club = club;
         this.ttr = ttr;
+        if (partnerFirstName != null) {
+            if (partnerFirstName.isBlank() || partnerLastName == null || partnerLastName.isBlank()
+                    || partnerClub == null || partnerClub.isBlank() || partnerTtr < 0) {
+                throw new IllegalArgumentException("partner data incomplete");
+            }
+        }
+        this.partnerFirstName = partnerFirstName;
+        this.partnerLastName = partnerLastName;
+        this.partnerClub = partnerClub;
+        this.partnerTtr = partnerTtr;
         this.points = 0;
         this.buchholz = 0;
         this.feinBuchholz = 0;
@@ -58,7 +97,81 @@ public class Player implements Serializable {
      * @return the full name of the player
      */
     public String getFullName() {
-        return firstName + " " + lastName;
+        String own = firstName + " " + lastName;
+        return isDoubles() ? own + " / " + partnerFirstName + " " + partnerLastName : own;
+    }
+
+    /**
+     * Returns {@code true} if this participant is a doubles pair.
+     *
+     * @return {@code true} for a pair
+     */
+    public boolean isDoubles() {
+        return partnerFirstName != null;
+    }
+
+    /**
+     * Returns a short name for tabs, sheets and printouts: the last name, for a pair
+     * "Becker/Krause".
+     *
+     * @return the short name
+     */
+    public String getShortName() {
+        return isDoubles() ? lastName + "/" + partnerLastName : lastName;
+    }
+
+    /**
+     * Returns the club of the first person (for a single player: the club).
+     *
+     * @return the own club
+     */
+    public String getOwnClub() {
+        return club;
+    }
+
+    /**
+     * Returns the TTR of the first person (for a single player: the TTR).
+     *
+     * @return the own TTR
+     */
+    public int getOwnTtr() {
+        return ttr;
+    }
+
+    /**
+     * Returns the partner's first name.
+     *
+     * @return the first name, or {@code null} for a single player
+     */
+    public String getPartnerFirstName() {
+        return partnerFirstName;
+    }
+
+    /**
+     * Returns the partner's last name.
+     *
+     * @return the last name, or {@code null} for a single player
+     */
+    public String getPartnerLastName() {
+        return partnerLastName;
+    }
+
+    /**
+     * Returns the partner's club.
+     *
+     * @return the club, or {@code null} for a single player
+     */
+    public String getPartnerClub() {
+        return partnerClub;
+    }
+
+    /**
+     * Returns the partner's TTR.
+     *
+     * @return the TTR, 0 for a single player
+     */
+    public int getPartnerTtr() {
+        return partnerTtr;
     }
 
     /**
@@ -80,21 +193,22 @@ public class Player implements Serializable {
     }
 
     /**
-     * Retrieves the club affiliation of the player.
+     * Retrieves the club affiliation; for a pair from different clubs "Club A / Club B".
      *
      * @return the club affiliation
      */
     public String getClub() {
-        return club;
+        if (!isDoubles() || partnerClub.equals(club)) return club;
+        return club + " / " + partnerClub;
     }
 
     /**
-     * Retrieves the TTR (Table Tennis Rating) value of the player.
+     * Retrieves the TTR value used for seeding; for a pair the sum of both players.
      *
      * @return the TTR value
      */
     public int getTtr() {
-        return ttr;
+        return ttr + partnerTtr;
     }
 
     /**
@@ -272,7 +386,11 @@ public class Player implements Serializable {
         return Objects.equals(firstName, other.firstName)
                 && Objects.equals(lastName, other.lastName)
                 && Objects.equals(club, other.club)
-                && ttr == other.ttr;
+                && ttr == other.ttr
+                && Objects.equals(partnerFirstName, other.partnerFirstName)
+                && Objects.equals(partnerLastName, other.partnerLastName)
+                && Objects.equals(partnerClub, other.partnerClub)
+                && partnerTtr == other.partnerTtr;
     }
 
     /**
@@ -282,11 +400,11 @@ public class Player implements Serializable {
      */
     @Override
     public int hashCode() {
-        return Objects.hash(firstName, lastName, club, ttr);
+        return Objects.hash(firstName, lastName, club, ttr, partnerFirstName, partnerLastName, partnerClub, partnerTtr);
     }
 
     @Override
     public String toString() {
-        return getFullName() + " (" + club + ")";
+        return getFullName() + " (" + getClub() + ")";
     }
 }

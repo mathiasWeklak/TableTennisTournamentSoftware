@@ -1,5 +1,7 @@
 package view;
 
+import model.TournamentMode;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -17,8 +19,12 @@ public class TournamentView extends JFrame {
     private final DefaultListModel<String> playerListModel;
     private final JTextField tournamentNameField;
     private final JTextField tableCountField;
-    private final JCheckBox modusField;
+    private final JComboBox<String> modeBox;
+    private final JCheckBox doublesBox;
     private final JTextField roundCountField;
+    private final JTextField groupSizeField;
+    private final JTextField qualifiersField;
+    private final JTextField bestNextField;
     private final JButton addPlayerButton;
     private final JButton editPlayerButton;
     private final JButton removePlayerButton;
@@ -30,7 +36,7 @@ public class TournamentView extends JFrame {
      */
     public TournamentView() {
         setTitle("Tischtennis Turniersoftware");
-        UITheme.sizeToScreen(this, 780, 540);
+        UITheme.sizeToScreen(this, 820, 620);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());
@@ -69,20 +75,55 @@ public class TournamentView extends JFrame {
         tableCountField.setFont(UITheme.FONT_BODY);
         formCard.add(tableCountField, gbc);
 
-        gbc.gridx = 4;
-        formCard.add(makeLabel("Jeder gegen Jeden:"), gbc);
-        gbc.gridx = 5;
-        modusField = new JCheckBox();
-        formCard.add(modusField, gbc);
+        // row 1: format and doubles
+        gbc.gridx = 0; gbc.gridy = 1;
+        formCard.add(makeLabel("Turnierform:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        modeBox = new JComboBox<>(new String[]{MODE_SWISS, MODE_ROUND_ROBIN, MODE_GROUPS_KO});
+        modeBox.setFont(UITheme.FONT_BODY);
+        formCard.add(modeBox, gbc);
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.gridx = 2;
+        formCard.add(makeLabel("Doppel:"), gbc);
+        gbc.gridx = 3;
+        doublesBox = new JCheckBox();
+        doublesBox.setOpaque(false);
+        doublesBox.setToolTipText("Doppelkonkurrenz: Teilnehmer sind Paare aus zwei Spielern.");
+        formCard.add(doublesBox, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 3;
-        formCard.add(makeLabel("Rundenzahl (Schweizer System, leer = offen):"), gbc);
-        gbc.gridx = 3; gbc.gridwidth = 1;
+        // row 2: Swiss System
+        gbc.gridx = 0; gbc.gridy = 2;
+        formCard.add(makeLabel("Rundenzahl:"), gbc);
+        gbc.gridx = 1;
         roundCountField = new JTextField(5);
         roundCountField.setFont(UITheme.FONT_BODY);
-        roundCountField.setToolTipText("Nach dieser Runde ist das Turnier beendet. Leer lassen, um ohne feste Rundenzahl zu spielen.");
+        roundCountField.setToolTipText("Schweizer System: nach dieser Runde ist das Turnier beendet. Leer lassen, um ohne feste Rundenzahl zu spielen.");
         formCard.add(roundCountField, gbc);
-        modusField.addItemListener(_ -> roundCountField.setEnabled(!modusField.isSelected()));
+
+        // row 3: groups + knockout
+        gbc.gridx = 0; gbc.gridy = 3;
+        formCard.add(makeLabel("Gruppengröße:"), gbc);
+        gbc.gridx = 1;
+        JPanel groupRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        groupRow.setOpaque(false);
+        groupSizeField = new JTextField("4", 3);
+        qualifiersField = new JTextField("2", 3);
+        bestNextField = new JTextField("0", 3);
+        for (JTextField f : new JTextField[]{groupSizeField, qualifiersField, bestNextField}) f.setFont(UITheme.FONT_BODY);
+        groupSizeField.setToolTipText("Maximale Teilnehmerzahl je Gruppe. Geht es nicht auf, haben einige Gruppen einen Teilnehmer weniger.");
+        qualifiersField.setToolTipText("So viele Teilnehmer je Gruppe kommen in die KO-Runde (z. B. 2 = Erster und Zweiter).");
+        bestNextField.setToolTipText("Zusätzlich die besten Nächstplatzierten aller Gruppen (z. B. die besten Gruppendritten).");
+        groupRow.add(groupSizeField);
+        groupRow.add(makeLabel("  weiter je Gruppe:"));
+        groupRow.add(qualifiersField);
+        groupRow.add(makeLabel("  + beste Nächstplatzierte:"));
+        groupRow.add(bestNextField);
+        gbc.gridwidth = 5;
+        formCard.add(groupRow, gbc);
+        gbc.gridwidth = 1;
+
+        modeBox.addActionListener(_ -> updateModeFields());
+        updateModeFields();
 
         JPanel playerCard = new JPanel(new BorderLayout(0, 6));
         playerCard.setBackground(UITheme.BACKGROUND);
@@ -90,7 +131,7 @@ public class TournamentView extends JFrame {
 
         JPanel playerInner = new JPanel(new BorderLayout(0, 6));
         playerInner.setBackground(UITheme.SURFACE);
-        playerInner.setBorder(UITheme.cardBorder("Spielerliste"));
+        playerInner.setBorder(UITheme.cardBorder("Teilnehmer"));
 
         playerListModel = new DefaultListModel<>();
         playerJList = new JList<>(playerListModel);
@@ -186,21 +227,85 @@ public class TournamentView extends JFrame {
     }
 
     /**
-     * Returns the mode checkbox ({@code true} = Round Robin, {@code false} = Swiss System).
-     *
-     * @return the mode checkbox
-     */
-    public JCheckBox getModusField() {
-        return modusField;
-    }
-
-    /**
      * Returns the "add player" button.
      *
      * @return the add player button
      */
     public JButton getAddPlayerButton() {
         return addPlayerButton;
+    }
+
+    /** Display names of the tournament formats. */
+    public static final String MODE_SWISS = "Schweizer System";
+    /** Display name of the Round Robin format. */
+    public static final String MODE_ROUND_ROBIN = "Jeder gegen Jeden";
+    /** Display name of the group/knockout format. */
+    public static final String MODE_GROUPS_KO = "Vorrunde in Gruppen + KO-Runde";
+
+    private void updateModeFields() {
+        Object mode = modeBox.getSelectedItem();
+        roundCountField.setEnabled(MODE_SWISS.equals(mode));
+        boolean groups = MODE_GROUPS_KO.equals(mode);
+        groupSizeField.setEnabled(groups);
+        qualifiersField.setEnabled(groups);
+        bestNextField.setEnabled(groups);
+    }
+
+    /**
+     * Returns the selected tournament format.
+     *
+     * @return the format
+     */
+    public TournamentMode getSelectedMode() {
+        Object mode = modeBox.getSelectedItem();
+        if (MODE_ROUND_ROBIN.equals(mode)) return TournamentMode.ROUND_ROBIN;
+        if (MODE_GROUPS_KO.equals(mode)) return TournamentMode.GROUPS_KO;
+        return TournamentMode.SWISS;
+    }
+
+    /**
+     * Returns the format selection.
+     *
+     * @return the combo box
+     */
+    public JComboBox<String> getModeBox() {
+        return modeBox;
+    }
+
+    /**
+     * Returns the doubles check box.
+     *
+     * @return the check box
+     */
+    public JCheckBox getDoublesBox() {
+        return doublesBox;
+    }
+
+    /**
+     * Returns the group size field.
+     *
+     * @return the field
+     */
+    public JTextField getGroupSizeField() {
+        return groupSizeField;
+    }
+
+    /**
+     * Returns the field for the number of qualifiers per group.
+     *
+     * @return the field
+     */
+    public JTextField getQualifiersField() {
+        return qualifiersField;
+    }
+
+    /**
+     * Returns the field for the number of best participants on the next place.
+     *
+     * @return the field
+     */
+    public JTextField getBestNextField() {
+        return bestNextField;
     }
 
     /**

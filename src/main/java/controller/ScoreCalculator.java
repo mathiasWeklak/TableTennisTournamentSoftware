@@ -21,7 +21,8 @@ import java.util.*;
  * System: the bye recipient gets one point, but the bye is not a played match, so it adds no win,
  * no sets and no balls. For Buchholz and Fein-Buchholz the bye counts as a game against a virtual
  * opponent who has as many points (and the same Buchholz) as the player himself (FIDE "dummy
- * opponent"). In Round Robin mode all matches of a withdrawn player are annulled (see
+ * opponent"). In a group/knockout tournament only group matches count for the statistics, byes
+ * are worth nothing. In Round Robin mode all matches of a withdrawn player are annulled (see
  * {@link #setAnnulledPlayers}). The same applies to completed rounds in which a player was not paired at all
  * (late registration, withdrawal). In Round Robin mode a bye ("spielfrei") is worth nothing. Duplicate bye matches for the same player are deduplicated before processing to
  * avoid double-counting.</p>
@@ -73,10 +74,12 @@ public class ScoreCalculator {
      * @return the counting matches
      */
     public static List<Match> countingMatches(List<Match> matches, TournamentMode mode, Set<Player> annulled) {
-        if (mode != TournamentMode.ROUND_ROBIN || annulled.isEmpty()) return matches;
+        if (mode == TournamentMode.SWISS || annulled.isEmpty()) return matches;
+        // Round Robin and group stage: struck; knockout matches stay (a withdrawal there is a walkover)
         return matches.stream()
-                .filter(m -> !annulled.contains(m.getFirstPlayer())
-                        && (m.getSecondPlayer() == null || !annulled.contains(m.getSecondPlayer())))
+                .filter(m -> m.getKoRound() > 0
+                        || (!annulled.contains(m.getFirstPlayer())
+                        && (m.getSecondPlayer() == null || !annulled.contains(m.getSecondPlayer()))))
                 .toList();
     }
 
@@ -102,6 +105,9 @@ public class ScoreCalculator {
         List<Match> matchesToProcess = deduplicateMatches(countingMatches(allMatches, mode, annulledPlayers));
 
         for (Match match : matchesToProcess) {
+            if (match.getKoRound() > 0) {
+                continue; // group/knockout: the table shows the group stage, knockout results are in the bracket
+            }
             Player p1 = match.getFirstPlayer();
             Player p2 = match.getSecondPlayer();
 

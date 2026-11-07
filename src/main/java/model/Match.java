@@ -21,6 +21,92 @@ public class Match implements Serializable {
     private int round;
     private int firstPointsBefore;
     private int secondPointsBefore;
+    // Group/knockout tournaments (0 = not used; also in files of older versions)
+    private int groupNo;      // 1 = group A, 2 = group B, ...
+    private int koRound;      // 1 = first knockout round, ...
+    private int koSlot;       // position of the match within its knockout round
+    private boolean thirdPlace;
+
+    /**
+     * Marks the match as a group match.
+     *
+     * @param groupNo the group number, 1 = group A
+     */
+    public void setGroup(int groupNo) {
+        this.groupNo = groupNo;
+    }
+
+    /**
+     * Returns the group number of a group match.
+     *
+     * @return 1 = group A, ...; 0 if this is no group match
+     */
+    public int getGroupNo() {
+        return groupNo;
+    }
+
+    /**
+     * Marks the match as a knockout match.
+     *
+     * @param koRound    the knockout round, 1 = first knockout round
+     * @param koSlot     the position within the round (0-based)
+     * @param thirdPlace {@code true} for the match for third place
+     */
+    public void setKnockout(int koRound, int koSlot, boolean thirdPlace) {
+        this.koRound = koRound;
+        this.koSlot = koSlot;
+        this.thirdPlace = thirdPlace;
+    }
+
+    /**
+     * Returns the knockout round.
+     *
+     * @return 1 = first knockout round, ...; 0 if this is no knockout match
+     */
+    public int getKoRound() {
+        return koRound;
+    }
+
+    /**
+     * Returns the position within the knockout round.
+     *
+     * @return the 0-based position
+     */
+    public int getKoSlot() {
+        return koSlot;
+    }
+
+    /**
+     * Returns {@code true} for the match for third place.
+     *
+     * @return {@code true} for the third place match
+     */
+    public boolean isThirdPlace() {
+        return thirdPlace;
+    }
+
+    /**
+     * Returns the winner of a decided match; for a bye the player himself.
+     *
+     * @return the winner, or {@code null} if not decided yet
+     */
+    public Player getWinner() {
+        if (secondPlayer == null) return firstPlayer;
+        int[] sets = decidedSets();
+        if (sets == null) return null;
+        return sets[0] > sets[1] ? firstPlayer : secondPlayer;
+    }
+
+    /**
+     * Returns the loser of a decided match.
+     *
+     * @return the loser, or {@code null} for a bye or if not decided yet
+     */
+    public Player getLoser() {
+        Player winner = getWinner();
+        if (winner == null || secondPlayer == null) return null;
+        return winner == firstPlayer ? secondPlayer : firstPlayer;
+    }
 
     /**
      * Constructs a match between two players at a specific table.

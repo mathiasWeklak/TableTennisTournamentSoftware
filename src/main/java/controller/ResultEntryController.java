@@ -190,8 +190,8 @@ public class ResultEntryController {
      * @return the tab title, e.g. "T1: Müller – Meier"
      */
     public static String tabTitle(Match match) {
-        return "T" + match.getTableNumber() + ": " + match.getFirstPlayer().getLastName()
-                + " – " + match.getSecondPlayer().getLastName();
+        return "T" + match.getTableNumber() + ": " + match.getFirstPlayer().getShortName()
+                + " – " + match.getSecondPlayer().getShortName();
     }
 
     private static String[][] readSets(JTextField[][] fields) {

@@ -10,28 +10,38 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Controller for the cross table (Kreuztabelle) feature.
+ * Controller for the cross table (Kreuztabelle).
  *
- * <p>Builds the cross table data from the list of all matches and provides print logic. The
- * dialog can be refreshed while it is open, so results entered later appear immediately.</p>
+ * <p>Builds the cross table data from the matches and provides print logic. A group/knockout
+ * tournament has one section (tab) per group, the other formats one section with all players.
+ * The dialog can be refreshed while it is open, so results entered later appear immediately.</p>
  */
 public class CrossTableController {
 
-    private List<Player> players;
+    /**
+     * One cross table, e.g. one group.
+     *
+     * @param title   the title, e.g. "Gruppe A"
+     * @param players the players in ranking order
+     */
+    public record Section(String title, List<Player> players) {
+    }
+
+    private List<Section> sections;
     private List<Match> allMatches;
     private final String tournamentName;
     private final CrossTableView view;
 
     /**
-     * Constructs the controller and shows the cross table dialog. Must be called on the EDT.
+     * Constructs the controller and shows the dialog. Must be called on the EDT.
      *
      * @param owner          the tournament window owning the dialog
-     * @param players        the list of players, sorted by ranking
-     * @param allMatches     all matches played across all rounds
+     * @param sections       the sections (one per group, or one with all players)
+     * @param allMatches     all matches
      * @param tournamentName the name of the tournament
      */
-    public CrossTableController(Window owner, List<Player> players, List<Match> allMatches, String tournamentName) {
-        this.players = new ArrayList<>(players);
+    public CrossTableController(Window owner, List<Section> sections, List<Match> allMatches, String tournamentName) {
+        this.sections = new ArrayList<>(sections);
         this.allMatches = new ArrayList<>(allMatches);
         this.tournamentName = tournamentName;
         this.view = new CrossTableView(owner, this, tournamentName);
@@ -41,14 +51,14 @@ public class CrossTableController {
     /**
      * Updates the cross table with new data, if the dialog is still open.
      *
-     * @param players    the players, sorted by ranking
+     * @param sections   the sections
      * @param allMatches all matches
      */
-    public void refresh(List<Player> players, List<Match> allMatches) {
-        this.players = new ArrayList<>(players);
+    public void refresh(List<Section> sections, List<Match> allMatches) {
+        this.sections = new ArrayList<>(sections);
         this.allMatches = new ArrayList<>(allMatches);
         if (isOpen()) {
-            view.setModel(buildTableModel(false));
+            view.rebuild();
         }
     }
 
@@ -69,16 +79,47 @@ public class CrossTableController {
     }
 
     /**
-     * Builds the {@link DefaultTableModel} for the cross table.
+     * Returns the number of sections.
+     *
+     * @return the number of sections
+     */
+    public int getSectionCount() {
+        return sections.size();
+    }
+
+    /**
+     * Returns the title of a section.
+     *
+     * @param section the section index
+     * @return the title
+     */
+    public String getSectionTitle(int section) {
+        return sections.get(section).title();
+    }
+
+    /**
+     * Builds the model of the first section.
+     *
+     * @param compact {@code true}: short names for printing
+     * @return the table model
+     */
+    public DefaultTableModel buildTableModel(boolean compact) {
+        return buildTableModel(0, compact);
+    }
+
+    /**
+     * Builds the {@link DefaultTableModel} of a section.
      *
      * <p>The first column contains the ranked player names. Columns 1..n correspond to each player
      * by their rank number. Each cell shows the result from the row player's perspective
      * (e.g. "3:1"), "-" on the diagonal, or "" if not played yet.</p>
      *
+     * @param section the section index
      * @param compact {@code true}: short names ("1. Müller") for printing
      * @return the populated table model
      */
-    public DefaultTableModel buildTableModel(boolean compact) {
+    public DefaultTableModel buildTableModel(int section, boolean compact) {
+        List<Player> players = sections.get(section).players();
         int n = players.size();
 
         String[] columnNames = new String[n + 1];
@@ -98,7 +139,7 @@ public class CrossTableController {
             Player rowPlayer = players.get(i);
             Object[] row = new Object[n + 1];
             row[0] = compact
-                    ? (i + 1) + ". " + rowPlayer.getLastName()
+                    ? (i + 1) + ". " + rowPlayer.getShortName()
                     : (i + 1) + ". " + rowPlayer.getFullName() + " (" + rowPlayer.getClub() + ")";
             for (int j = 0; j < n; j++) {
                 row[j + 1] = i == j ? "-" : findResult(rowPlayer, players.get(j));
@@ -110,7 +151,8 @@ public class CrossTableController {
     }
 
     /**
-     * Finds the result of a match between rowPlayer and colPlayer from rowPlayer's perspective.
+     * Finds the result of a group or league match between rowPlayer and colPlayer from rowPlayer's
+     * perspective. Knockout matches are not part of the cross table.
      *
      * @param rowPlayer the player whose perspective is used
      * @param colPlayer the opponent
@@ -119,7 +161,8 @@ public class CrossTableController {
     private String findResult(Player rowPlayer, Player colPlayer) {
         for (Match match : allMatches) {
             String result = match.getOverallResult();
-            if (result == null || result.isEmpty() || result.equals(":") || match.getSecondPlayer() == null) {
+            if (result == null || result.isEmpty() || result.equals(":") || match.getSecondPlayer() == null
+                    || match.getKoRound() > 0) {
                 continue;
             }
             // decided results as "3:1"; entries that do not count yet in brackets, e.g. "(1:0)"
@@ -150,10 +193,20 @@ public class CrossTableController {
     }
 
     /**
-     * Prints the cross table in a compact layout using the system print dialog.
+     * Prints the first section in a compact layout.
      */
     public void printCrossTable() {
-        PrintUtil.printTable(view, CrossTableView.createPrintTable(buildTableModel(true)),
-                "Kreuztabelle - " + tournamentName, "Kreuztabelle: " + tournamentName);
+        printCrossTable(0);
+    }
+
+    /**
+     * Prints a section in a compact layout using the system print dialog.
+     *
+     * @param section the section index
+     */
+    public void printCrossTable(int section) {
+        String title = sections.size() > 1 ? " – " + getSectionTitle(section) : "";
+        PrintUtil.printTable(view, CrossTableView.createPrintTable(buildTableModel(section, true)),
+                "Kreuztabelle - " + tournamentName, "Kreuztabelle: " + tournamentName + title);
     }
 }
