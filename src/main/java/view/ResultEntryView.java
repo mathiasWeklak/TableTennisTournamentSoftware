@@ -274,6 +274,24 @@ public class ResultEntryView extends JDialog {
         return data;
     }
 
+    /**
+     * Selects the tab of a match and puts the cursor into its first field.
+     *
+     * @param match the match
+     */
+    public void selectMatch(Match match) {
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (tabbedPane.getComponentAt(i) instanceof JPanel panel
+                    && panel.getClientProperty("matchData") instanceof ResultEntryController.MatchPanelData data
+                    && data.match() == match) {
+                tabbedPane.setSelectedIndex(i);
+                int index = i;
+                SwingUtilities.invokeLater(() -> focusFirstField(index));
+                return;
+            }
+        }
+    }
+
     private void focusFirstField(int tabIndex) {
         if (tabbedPane.getComponentAt(tabIndex) instanceof JPanel panel
                 && panel.getClientProperty("matchData") instanceof ResultEntryController.MatchPanelData d) {

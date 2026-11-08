@@ -50,10 +50,23 @@ public class ResultEntryController {
      * @param tournamentRound the tournament
      */
     public ResultEntryController(Window owner, TournamentRound tournamentRound) {
+        this(owner, tournamentRound, null);
+    }
+
+    /**
+     * Shows the result entry for the current round with the given match selected (e.g. after a
+     * double-click in the pairings). Blocks until the dialog is closed. Must be called on the EDT.
+     *
+     * @param owner           the window that owns the modal dialog
+     * @param tournamentRound the tournament
+     * @param selected        the match to show first, or {@code null}
+     */
+    public ResultEntryController(Window owner, TournamentRound tournamentRound, Match selected) {
         this.tournamentRound = tournamentRound;
         this.shownRound = tournamentRound.getCurrentRound();
         this.view = new ResultEntryView(owner, this, tournamentRound.correctableRounds(), shownRound);
         this.view.showMatches(tournamentRound.matchesOfRound(shownRound), false);
+        if (selected != null) this.view.selectMatch(selected);
         this.view.setVisible(true);
     }
 

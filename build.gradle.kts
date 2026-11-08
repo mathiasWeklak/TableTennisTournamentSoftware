@@ -6,7 +6,7 @@ plugins {
     jacoco
 }
 
-version = "1.2.2"
+version = "1.3.0"
 
 val licenseFile = project.file("LICENSE")
 
@@ -31,6 +31,15 @@ java {
 
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
+}
+
+// the version shown in the "Über" dialog
+tasks.processResources {
+    val appVersion = project.version.toString()
+    inputs.property("appVersion", appVersion)
+    filesMatching("version.properties") {
+        expand("version" to appVersion)
+    }
 }
 
 tasks.register<Jar>("createExecutableJar") {

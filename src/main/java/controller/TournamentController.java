@@ -80,11 +80,11 @@ public class TournamentController {
         view.getAddPlayerButton().addActionListener(_ -> addPlayer());
         view.getRemovePlayerButton().addActionListener(_ -> removePlayer());
         view.getEditPlayerButton().addActionListener(_ -> editPlayer());
-        view.getPlayerJList().addMouseListener(new java.awt.event.MouseAdapter() {
+        view.getPlayerTable().addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2
-                        && view.getPlayerJList().locationToIndex(e.getPoint()) >= 0) {
+                        && view.getPlayerTable().rowAtPoint(e.getPoint()) >= 0) {
                     editPlayer();
                 }
             }
@@ -100,6 +100,7 @@ public class TournamentController {
             view.getAddPlayerButton().setText(doubles() ? "+ Doppel hinzufügen" : "+ Spieler hinzufügen");
             view.getEditPlayerButton().setText(doubles() ? "Doppel bearbeiten" : "Spieler bearbeiten");
             view.getRemovePlayerButton().setText(doubles() ? "Doppel entfernen" : "Spieler entfernen");
+            updatePlayerList();
         });
         view.getLoadMenuItem().addActionListener(_ -> loadTournamentFromFile());
         view.getImportMenuItem().addActionListener(_ -> importParticipants());
@@ -132,7 +133,7 @@ public class TournamentController {
      * Edits the selected player (also by double-click on the list).
      */
     private void editPlayer() {
-        int selectedIndex = view.getPlayerJList().getSelectedIndex();
+        int selectedIndex = view.getPlayerTable().getSelectedRow();
         if (selectedIndex == -1) {
             JOptionPane.showMessageDialog(view, doubles() ? "Bitte wählen Sie ein Doppel aus der Liste aus."
                     : "Bitte wählen Sie einen Spieler aus der Liste aus.");
@@ -169,7 +170,7 @@ public class TournamentController {
      * Prompts the user to select a player to remove.
      */
     private void removePlayer() {
-        int selectedIndex = view.getPlayerJList().getSelectedIndex();
+        int selectedIndex = view.getPlayerTable().getSelectedRow();
         if (selectedIndex != -1) {
             Player player = playerList.get(selectedIndex);
             int answer = JOptionPane.showConfirmDialog(view,
@@ -192,10 +193,12 @@ public class TournamentController {
     private void updatePlayerList() {
         playerList.sort((p1, p2) -> Integer.compare(p2.getTtr(), p1.getTtr()));
 
-        DefaultListModel<String> playerListModel = view.getPlayerListModel();
-        playerListModel.clear();
-        playerList.forEach(player -> playerListModel.addElement(player.getFullName() + " - " + player.getClub() + " - TTR: "
-                + (player.isDoubles() ? player.getOwnTtr() + " + " + player.getPartnerTtr() + " = " + player.getTtr() : player.getTtr())));
+        List<Object[]> rows = new ArrayList<>();
+        for (Player player : playerList) {
+            rows.add(new Object[]{player.getFullName(), player.getClub(), player.isDoubles()
+                    ? player.getOwnTtr() + " + " + player.getPartnerTtr() + " = " + player.getTtr() : String.valueOf(player.getTtr())});
+        }
+        view.showParticipants(rows, doubles());
     }
 
     private boolean doubles() {

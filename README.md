@@ -22,10 +22,12 @@ Sie unterstützt das **Schweizer System**, den Modus **„Jeder gegen Jeden“**
 - 🎲 **Setzliste**: nach TTR; bei gleichem oder fehlendem TTR entscheidet das Los
 - 📋 **Turnierablauf**: Auslosung mit Rückfrage, „Auslosung zurücknehmen“ solange noch kein Ergebnis erfasst ist, in Runde 1 „Zurück zur Einrichtung“ (z. B. für Nachzügler; Teilnehmer und Einstellungen bleiben erhalten), optionale Rundenzahl im Schweizer System
 - 🚪 **Spieler zurückziehen** (alle Turnierformen) und **Spieler nachmelden** (Schweizer System, nicht mehr in der letzten geplanten Runde)
+- 📊 **Übersicht im Turnierfenster**: Paarungen als Tabelle mit farbigem Status (offen, Ergebnis, wartet, gestrichen); Doppelklick auf ein Spiel öffnet die Ergebniserfassung genau dort; Fortschritt der Runde im Kopf („9 von 16 Spielen erfasst“); die ersten drei der Rangliste fett
 - 🪑 **Tischaufruf**: Jeder Tisch wird einmal vergeben; gibt es mehr Spiele als Tische, warten die übrigen und werden aufgerufen, sobald ein Tisch frei wird (Hinweis nach dem Speichern eines Ergebnisses)
 - 🧮 **Ergebniseingabe**: satzweise mit Prüfung der Tischtennisregeln, Statusanzeige pro Spiel, Tastaturbedienung (Enter, nach entschiedenem Spiel direkt zum nächsten Spiel; Strg+S, Esc), „Kampflos“-Schaltflächen, Korrektur früherer Runden (ein KO-Ergebnis kann den Sieger nicht mehr ändern, sobald die nächste KO-Runde ausgelost ist)
 - 🖨️ **Drucken / Export**: Rangliste bzw. Gruppentabellen (nach Turnierende mit Endplatzierung), Ergebnisliste mit allen Satzergebnissen, Siegerliste, Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde bzw. Gruppe oder KO-Runde; lange Namen und Doppel zweizeilig); Rangliste bzw. Gruppentabellen und Ergebnisliste auch als CSV (z. B. für Excel oder die Vereinshomepage); als PDF über einen PDF-Drucker wie „Microsoft Print to PDF“
 - 🛠️ **Manuelle Anpassung der Setzung** (nur im Schweizer System)
+- ℹ️ **Über-Dialog** (Menü „Hilfe“) mit Versionsnummer, die Version steht auch im Fenstertitel der Einrichtung
 - ⚠️ **Fehlerdialog** bei unerwarteten Fehlern, Details in `Turniersoftware-Fehler.log`
 
 ---

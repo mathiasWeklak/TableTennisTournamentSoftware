@@ -72,6 +72,7 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
             boxes.add(createBox(t));
         }
         legend.setText(legendText);
+        legend.setIcon(legendText == null || legendText.isBlank() ? null : new LegendIcon());
         revalidate();
         repaint();
     }
@@ -351,6 +352,27 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
     @Override
     public boolean getScrollableTracksViewportHeight() {
         return getParent() != null && getParent().getHeight() > getPreferredSize().height;
+    }
+
+    /** A small square in the colour of the qualified participants. */
+    private static final class LegendIcon implements javax.swing.Icon {
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            g.setColor(QUALIFIED);
+            g.fillRect(x, y, 14, 14);
+            g.setColor(new Color(150, 190, 150));
+            g.drawRect(x, y, 13, 13);
+        }
+
+        @Override
+        public int getIconWidth() {
+            return 14;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return 14;
+        }
     }
 
     // --- rendering ---------------------------------------------------------------------------

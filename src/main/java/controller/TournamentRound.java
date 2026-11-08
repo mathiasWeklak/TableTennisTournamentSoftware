@@ -7,6 +7,7 @@ import model.ResultRules;
 import model.TournamentMode;
 import model.TournamentState;
 import view.GroupTablesPanel;
+import view.PairingStatus;
 import view.TournamentRoundView;
 import view.UITheme;
 
@@ -38,6 +39,8 @@ public class TournamentRound {
     private final TournamentRoundView view;
     private CrossTableController crossTable;
     private RefereeSheetsController refereeSheets;
+    /** The match of every row of the pairings table ({@code null} for rows without match). */
+    private final List<Match> pairingRows = new ArrayList<>();
 
     private int currentRound;
 
@@ -203,6 +206,18 @@ public class TournamentRound {
             new ResultEntryController(view, this);
             updateResultsTable();
         });
+        // double-click on a pairing: result entry at this match
+        view.getPairingsTable().addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() != 2 || !SwingUtilities.isLeftMouseButton(e)) return;
+                int row = view.getPairingsTable().rowAtPoint(e.getPoint());
+                Match match = row >= 0 && row < pairingRows.size() ? pairingRows.get(row) : null;
+                if (match == null || match.getSecondPlayer() == null || isStruck(match, struckPlayers())) return;
+                new ResultEntryController(view, TournamentRound.this, match);
+                updateResultsTable();
+            }
+        });
         view.getPrintTableButton().addActionListener(_ -> showPrintMenu());
         view.getCrossTableButton().addActionListener(_ -> showCrossTable());
         if (view.getBracketButton() != null) {
@@ -253,13 +268,12 @@ public class TournamentRound {
         } else {
             view.getResultsTable().setModel(getDefaultTableModel(standings));
             UITheme.applyTableStyling(view.getResultsTable());
+            view.getResultsTable().setIntercellSpacing(new java.awt.Dimension(0, 1));
+            view.getResultsTable().putClientProperty("podium", Boolean.TRUE);
             UITheme.setNameColumnWide(view.getResultsTable(), 1);
         }
 
-        String text = formatPairingsWithStatus(pairingEngine.getMatches(), mode, pairingEngine.knockoutRounds(), struckPlayers());
-        if (groups && pairingEngine.isFinished()) text += finalPlacingText();
-        view.getPairingsTextArea().setText(text);
-        view.getPairingsTextArea().setCaretPosition(0);
+        showPairings();
         if (crossTable != null && crossTable.isOpen()) {
             crossTable.refresh(crossTableSections(standings), countingMatches());
         }
@@ -287,9 +301,106 @@ public class TournamentRound {
         return ScoreCalculator.countingMatches(pairingEngine.getAllMatches(), mode, pairingEngine.annulledPlayers());
     }
 
+    /**
+     * Fills the pairings table: table, (stage,) participants and a coloured status; after the
+     * end of a group/knockout tournament the final placing.
+     */
+    private void showPairings() {
+        pairingRows.clear();
+        DefaultTableModel model;
+        if (mode == TournamentMode.GROUPS_KO && pairingEngine.isFinished()) {
+            model = readOnlyModel("Platz", "Name", "Verein");
+            for (Map.Entry<Player, Integer> e : finalPlacing()) {
+                model.addRow(new Object[]{e.getValue() + ".", e.getKey().getFullName(), e.getKey().getClub()});
+                pairingRows.add(null);
+            }
+            view.setPairingsTitle("Endplatzierung");
+        } else {
+            boolean groups = mode == TournamentMode.GROUPS_KO;
+            String who = doubles ? "Doppel" : "Spieler";
+            model = groups ? readOnlyModel("Tisch", "Runde", who, "Gegner", "Ergebnis")
+                    : readOnlyModel("Tisch", who, "Gegner", "Ergebnis");
+            Set<Player> struck = struckPlayers();
+            int koRounds = pairingEngine.knockoutRounds();
+            for (Match m : pairingEngine.getMatches()) {
+                List<Object> row = new ArrayList<>();
+                row.add(m.getSecondPlayer() == null || m.getTableNumber() <= 0 ? "" : m.getTableNumber());
+                if (groups) row.add(stageLabel(m, koRounds).strip());
+                row.add(m.getFirstPlayer().getFullName() + " (" + m.getFirstPlayer().getClub() + ")");
+                row.add(m.getSecondPlayer() == null ? "" : m.getSecondPlayer().getFullName() + " (" + m.getSecondPlayer().getClub() + ")");
+                row.add(pairingStatus(m, struck, koRounds));
+                model.addRow(row.toArray());
+                pairingRows.add(m);
+            }
+            view.setPairingsTitle("Aktuelle Begegnungen");
+        }
+        JTable table = view.getPairingsTable();
+        table.setModel(model);
+        UITheme.applyTableStyling(table);
+        table.setIntercellSpacing(new java.awt.Dimension(0, 1));
+        int last = table.getColumnCount() - 1;
+        if (!(mode == TournamentMode.GROUPS_KO && pairingEngine.isFinished())) {
+            table.getColumnModel().getColumn(last).setCellRenderer(new UITheme.StatusRenderer());
+        }
+        UITheme.setNameColumnWide(table, mode == TournamentMode.GROUPS_KO && !pairingEngine.isFinished() ? 2 : 1);
+    }
+
+    private static DefaultTableModel readOnlyModel(String... columns) {
+        return new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+    }
+
+    /**
+     * Status of a pairing for the pairings table.
+     *
+     * @param m        the match
+     * @param struck   players whose matches are struck
+     * @param koRounds number of knockout rounds
+     * @return the status
+     */
+    static PairingStatus pairingStatus(Match m, Set<Player> struck, int koRounds) {
+        if (m.getSecondPlayer() == null) {
+            String text = m.isThirdPlace() ? "kampflos Platz 3"
+                    : m.getKoRound() > 0 && m.getKoRound() == koRounds ? "kampflos Turniersieg"
+                    : m.getKoRound() > 0 ? "Freilos, kommt weiter"
+                    : m.getGroupNo() > 0 ? "spielfrei" : "Freilos";
+            return new PairingStatus(text, PairingStatus.Kind.BYE);
+        }
+        if (isStruck(m, struck)) return new PairingStatus("gestrichen", PairingStatus.Kind.STRUCK);
+        int[] sets = m.decidedSets();
+        if (sets != null) return new PairingStatus(sets[0] + ":" + sets[1] + (m.isWalkover() ? " kampflos" : ""), PairingStatus.Kind.DONE);
+        if (m.getTableNumber() <= 0) return new PairingStatus("wartet auf Tisch", PairingStatus.Kind.WAITING);
+        return new PairingStatus("offen", PairingStatus.Kind.OPEN);
+    }
+
+    /**
+     * Progress of the current round for the header, e.g. "7 von 16 Spielen erfasst · 2 warten
+     * auf einen Tisch".
+     *
+     * @return the text, empty without matches
+     */
+    String progressText() {
+        if (pairingEngine.isFinished()) return "";
+        Set<Player> struck = struckPlayers();
+        List<Match> real = pairingEngine.getMatches().stream()
+                .filter(m -> m.getSecondPlayer() != null && !isStruck(m, struck)).toList();
+        if (real.isEmpty()) return "";
+        long done = real.stream().filter(Match::isDecided).count();
+        long waiting = real.stream().filter(m -> !m.isDecided() && m.getTableNumber() <= 0).count();
+        String text = done == real.size() ? "Alle " + real.size() + (real.size() == 1 ? " Spiel erfasst" : " Spiele erfasst")
+                : done + " von " + real.size() + (real.size() == 1 ? " Spiel" : " Spielen") + " erfasst";
+        if (waiting > 0) text += " · " + waiting + (waiting == 1 ? " wartet" : " warten") + " auf einen Tisch";
+        return text;
+    }
+
     private void updateControls() {
         boolean finished = pairingEngine.isFinished();
         view.showRound(roundLabel(), finished);
+        view.showProgress(progressText());
         view.getNextRoundButton().setEnabled(!finished);
         int total = totalRounds();
         view.getNextRoundButton().setText(total > 0 && currentRound >= total ? "Turnier abschließen"
@@ -515,8 +626,8 @@ public class TournamentRound {
         GroupKoState groupKo = pairingEngine.getGroupKo();
         if (groupKo == null) return "";
         return groupKo.bracket().isEmpty()
-                ? "Grün: nach aktuellem Stand in der KO-Runde (vorläufig, solange die Vorrunde läuft)."
-                : "Grün: für die KO-Runde qualifiziert.";
+                ? "nach aktuellem Stand in der KO-Runde (vorläufig, solange die Vorrunde läuft)"
+                : "für die KO-Runde qualifiziert";
     }
 
     /**

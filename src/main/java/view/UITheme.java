@@ -26,7 +26,7 @@ public final class UITheme {
     /** Card and table surface color. */
     public static final Color SURFACE      = Color.WHITE;
     /** Alternating row highlight color for tables and lists. */
-    public static final Color ROW_ALT      = new Color(232, 240, 254);
+    public static final Color ROW_ALT      = new Color(244, 247, 252);
     /** Default foreground color for body text. */
     public static final Color TEXT_PRIMARY = new Color(33, 33, 33);
     /** Muted foreground color for secondary labels. */
@@ -99,14 +99,56 @@ public final class UITheme {
     public static JButton createPrimaryButton(String text) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_BODY.deriveFont(Font.BOLD));
-        btn.setBackground(PRIMARY);
-        btn.setForeground(Color.WHITE);
-        btn.setFocusPainted(false);
-        btn.setBorderPainted(false);
-        btn.setOpaque(true);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setBorder(BorderFactory.createEmptyBorder(9, 18, 9, 18));
+        flat(btn, PRIMARY, new Color(21, 101, 192), new Color(13, 71, 161), Color.WHITE,
+                new Color(176, 190, 210), Color.WHITE);
         return btn;
+    }
+
+    /**
+     * Gives a button a flat look of its own (no look-and-feel background below it): background
+     * and text colour for normal, hover, pressed and disabled.
+     */
+    private static void flat(JButton btn, Color normal, Color hover, Color pressed, Color text,
+                             Color disabledBackground, Color disabledText) {
+        btn.setUI(new FlatButtonUI());
+        btn.setFocusPainted(false);
+        btn.setContentAreaFilled(true);
+        btn.setOpaque(true);
+        btn.setRolloverEnabled(true);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        Runnable update = () -> {
+            ButtonModel m = btn.getModel();
+            boolean enabled = btn.isEnabled();
+            btn.setBackground(!enabled ? disabledBackground : m.isPressed() ? pressed : m.isRollover() ? hover : normal);
+            btn.setForeground(enabled ? text : disabledText);
+        };
+        btn.getModel().addChangeListener(_ -> update.run());
+        btn.addPropertyChangeListener("enabled", _ -> update.run());
+        update.run();
+    }
+
+    /** Button UI that paints the text in the button's foreground colour, also when disabled. */
+    private static final class FlatButtonUI extends javax.swing.plaf.basic.BasicButtonUI {
+        @Override
+        protected void paintText(Graphics g, AbstractButton b, Rectangle textRect, String text) {
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setColor(b.getForeground());
+            g2.setFont(b.getFont());
+            FontMetrics fm = g2.getFontMetrics();
+            g2.drawString(text, textRect.x, textRect.y + fm.getAscent());
+        }
+
+        @Override
+        protected void paintButtonPressed(Graphics g, AbstractButton b) {
+            // the pressed colour is the background (see flat)
+        }
+
+        @Override
+        protected void paintFocus(Graphics g, AbstractButton b, Rectangle viewRect, Rectangle textRect, Rectangle iconRect) {
+            // no focus rectangle
+        }
     }
 
     /**
@@ -119,15 +161,11 @@ public final class UITheme {
     public static JButton createSecondaryButton(String text) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_BODY);
-        btn.setBackground(SURFACE);
-        btn.setForeground(PRIMARY);
-        btn.setFocusPainted(false);
-        btn.setOpaque(true);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(PRIMARY, 1, true),
+            BorderFactory.createLineBorder(new Color(196, 205, 216), 1),
             BorderFactory.createEmptyBorder(8, 17, 8, 17)
         ));
+        flat(btn, SURFACE, new Color(238, 244, 252), new Color(222, 233, 248), PRIMARY, SURFACE, new Color(158, 164, 172));
         return btn;
     }
 
@@ -259,6 +297,34 @@ public final class UITheme {
     }
 
     /**
+     * Renders a {@link PairingStatus} as a coloured label: open grey, decided green, waiting
+     * orange, struck red and crossed out, bye muted.
+     */
+    public static class StatusRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                boolean isSelected, boolean hasFocus, int row, int column) {
+            super.getTableCellRendererComponent(table, value, isSelected, false, row, column);
+            setHorizontalAlignment(SwingConstants.CENTER);
+            setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+            if (!(value instanceof PairingStatus status)) return this;
+            Color[] colors = switch (status.kind()) {
+                case DONE -> new Color[]{new Color(226, 242, 228), new Color(27, 94, 32)};
+                case WAITING -> new Color[]{new Color(255, 239, 214), new Color(170, 90, 0)};
+                case STRUCK -> new Color[]{new Color(252, 228, 228), new Color(170, 40, 40)};
+                case BYE -> new Color[]{SURFACE, TEXT_MUTED};
+                case OPEN -> new Color[]{new Color(236, 239, 243), new Color(80, 86, 94)};
+            };
+            if (!isSelected) setBackground(colors[0]);
+            setForeground(colors[1]);
+            setFont(FONT_BODY.deriveFont(status.kind() == PairingStatus.Kind.DONE ? Font.BOLD : Font.PLAIN));
+            setText(status.kind() == PairingStatus.Kind.STRUCK
+                    ? "<html><s>" + status.text() + "</s></html>" : status.text());
+            return this;
+        }
+    }
+
+    /**
      * Table cell renderer that applies alternating row background colors and consistent
      * padding and font settings across all cells.
      */
@@ -276,6 +342,11 @@ public final class UITheme {
             if (!isSelected) {
                 setBackground(row % 2 == 0 ? SURFACE : ROW_ALT);
                 setForeground(TEXT_PRIMARY);
+            }
+            // ranking: the first three places in bold
+            if (Boolean.TRUE.equals(table.getClientProperty("podium"))
+                    && table.getValueAt(row, 0) instanceof Integer rank && rank <= 3) {
+                setFont(FONT_BODY.deriveFont(Font.BOLD));
             }
             setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
             return this;

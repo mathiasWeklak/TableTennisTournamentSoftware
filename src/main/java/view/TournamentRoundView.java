@@ -16,7 +16,9 @@ import java.awt.*;
 public class TournamentRoundView extends JFrame {
 
     private final String tournamentName;
-    private final JTextArea pairingsTextArea;
+    private final JTable pairingsTable;
+    private final JPanel pairingsInner;
+    private final JLabel progressLabel;
     private final JTable resultsTable;
     private final GroupTablesPanel groupTablesPanel;
     private final JLabel currentRoundLabel;
@@ -68,6 +70,11 @@ public class TournamentRoundView extends JFrame {
         headerTextPanel.add(titleLabel);
         headerTextPanel.add(Box.createVerticalStrut(2));
         headerTextPanel.add(currentRoundLabel);
+        progressLabel = new JLabel(" ");
+        progressLabel.setFont(UITheme.FONT_BODY);
+        progressLabel.setForeground(new Color(220, 232, 255));
+        headerTextPanel.add(Box.createVerticalStrut(2));
+        headerTextPanel.add(progressLabel);
         headerPanel.add(headerTextPanel, BorderLayout.WEST);
 
         statusLabel = new JLabel(" ");
@@ -77,16 +84,17 @@ public class TournamentRoundView extends JFrame {
         add(headerPanel, BorderLayout.NORTH);
 
         // --- pairings ------------------------------------------------------------------------
-        pairingsTextArea = new JTextArea();
-        pairingsTextArea.setEditable(false);
-        pairingsTextArea.setFont(UITheme.FONT_MONO);
-        pairingsTextArea.setMargin(new Insets(8, 10, 8, 10));
-        pairingsTextArea.setBackground(UITheme.SURFACE);
+        pairingsTable = new JTable();
+        UITheme.applyTableStyling(pairingsTable);
+        pairingsTable.setIntercellSpacing(new Dimension(0, 1));
+        pairingsTable.setToolTipText("Doppelklick auf ein Spiel: Ergebnis erfassen");
 
-        JPanel pairingsInner = new JPanel(new BorderLayout());
+        pairingsInner = new JPanel(new BorderLayout());
         pairingsInner.setBackground(UITheme.SURFACE);
         pairingsInner.setBorder(UITheme.cardBorder("Aktuelle Begegnungen"));
-        pairingsInner.add(new JScrollPane(pairingsTextArea), BorderLayout.CENTER);
+        JScrollPane pairingsScroll = UITheme.neutralViewport(new JScrollPane(pairingsTable));
+        pairingsScroll.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UITheme.BORDER_COLOR));
+        pairingsInner.add(pairingsScroll, BorderLayout.CENTER);
 
         JPanel roundButtons = new JPanel(new WrapLayout(FlowLayout.CENTER, 10, 6));
         roundButtons.setBackground(UITheme.SURFACE);
@@ -218,12 +226,30 @@ public class TournamentRoundView extends JFrame {
     }
 
     /**
-     * Returns the pairings text area showing the current round's match-ups.
+     * Returns the table with the current round's pairings.
      *
-     * @return the pairings text area
+     * @return the pairings table
      */
-    public JTextArea getPairingsTextArea() {
-        return pairingsTextArea;
+    public JTable getPairingsTable() {
+        return pairingsTable;
+    }
+
+    /**
+     * Sets the title of the pairings card, e.g. "Aktuelle Begegnungen" or "Endplatzierung".
+     *
+     * @param title the title
+     */
+    public void setPairingsTitle(String title) {
+        pairingsInner.setBorder(UITheme.cardBorder(title));
+    }
+
+    /**
+     * Shows the progress of the round in the header, e.g. "7 von 16 Spielen erfasst".
+     *
+     * @param text the progress text
+     */
+    public void showProgress(String text) {
+        progressLabel.setText(text == null || text.isEmpty() ? " " : text);
     }
 
     /**

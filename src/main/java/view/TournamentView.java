@@ -15,8 +15,12 @@ import java.awt.*;
  * {@link controller.TournamentController}.</p>
  */
 public class TournamentView extends JFrame {
-    private final JList<String> playerJList;
-    private final DefaultListModel<String> playerListModel;
+    private final JTable playerTable;
+    private final javax.swing.table.DefaultTableModel playerTableModel;
+    private final JLabel playerCountLabel;
+    private final JLabel roundCountLabel;
+    private final JLabel groupSizeLabel;
+    private final JPanel groupRow;
     private final JTextField tournamentNameField;
     private final JTextField tableCountField;
     private final JComboBox<String> modeBox;
@@ -38,7 +42,7 @@ public class TournamentView extends JFrame {
      * Constructs and lays out the tournament setup window.
      */
     public TournamentView() {
-        setTitle("Tischtennis Turniersoftware");
+        setTitle(AppInfo.NAME + " " + AppInfo.version());
         UITheme.sizeToScreen(this, 820, 620);
         UITheme.applyAppIcon(this);
         setLocationRelativeTo(null);
@@ -97,7 +101,8 @@ public class TournamentView extends JFrame {
 
         // row 2: Swiss System
         gbc.gridx = 0; gbc.gridy = 2;
-        formCard.add(makeLabel("Rundenzahl:"), gbc);
+        roundCountLabel = makeLabel("Rundenzahl:");
+        formCard.add(roundCountLabel, gbc);
         gbc.gridx = 1;
         roundCountField = new JTextField(5);
         roundCountField.setFont(UITheme.FONT_BODY);
@@ -106,9 +111,10 @@ public class TournamentView extends JFrame {
 
         // row 3: groups + knockout
         gbc.gridx = 0; gbc.gridy = 3;
-        formCard.add(makeLabel("Gruppengröße:"), gbc);
+        groupSizeLabel = makeLabel("Gruppengröße:");
+        formCard.add(groupSizeLabel, gbc);
         gbc.gridx = 1;
-        JPanel groupRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        groupRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         groupRow.setOpaque(false);
         groupSizeField = new JTextField("4", 3);
         qualifiersField = new JTextField("2", 3);
@@ -143,13 +149,23 @@ public class TournamentView extends JFrame {
         playerInner.setBackground(UITheme.SURFACE);
         playerInner.setBorder(UITheme.cardBorder("Teilnehmer"));
 
-        playerListModel = new DefaultListModel<>();
-        playerJList = new JList<>(playerListModel);
-        playerJList.setFont(UITheme.FONT_BODY);
-        playerJList.setBackground(UITheme.SURFACE);
-        playerJList.setSelectionBackground(new Color(187, 222, 251));
+        playerTableModel = new javax.swing.table.DefaultTableModel(new String[]{"Name", "Verein", "TTR"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        playerTable = new JTable(playerTableModel);
+        UITheme.applyTableStyling(playerTable);
+        playerTable.setIntercellSpacing(new Dimension(0, 1));
+        playerTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        playerTable.setToolTipText("Doppelklick: bearbeiten");
 
-        JScrollPane playerScrollPane = new JScrollPane(playerJList);
+        playerCountLabel = new JLabel("Noch keine Teilnehmer – „+ Spieler hinzufügen“ oder Datei → Teilnehmer importieren");
+        playerCountLabel.setFont(UITheme.FONT_BODY);
+        playerCountLabel.setForeground(UITheme.TEXT_MUTED);
+        playerInner.add(playerCountLabel, BorderLayout.NORTH);
+        JScrollPane playerScrollPane = UITheme.neutralViewport(new JScrollPane(playerTable));
         playerInner.add(playerScrollPane, BorderLayout.CENTER);
 
         JPanel playerBtns = new JPanel(new WrapLayout(FlowLayout.LEFT, 8, 6));
@@ -191,6 +207,18 @@ public class TournamentView extends JFrame {
         exportMenuItem.setFont(UITheme.FONT_BODY);
         fileMenu.add(exportMenuItem);
         menuBar.add(fileMenu);
+        JMenu helpMenu = new JMenu("Hilfe");
+        helpMenu.setFont(UITheme.FONT_BODY);
+        JMenuItem aboutItem = new JMenuItem("Über …");
+        aboutItem.setFont(UITheme.FONT_BODY);
+        aboutItem.addActionListener(_ -> JOptionPane.showMessageDialog(this,
+                AppInfo.NAME + "\nVersion " + AppInfo.version()
+                        + "\n\nSchweizer System, Jeder gegen Jeden, Vorrunde in Gruppen + KO-Runde; Einzel und Doppel."
+                        + "\nFür nicht-kommerzielle Vereins-, Hobby- und Freizeitturniere (Lizenz CC BY-NC-SA 4.0)."
+                        + "\n\ngithub.com/mathiasWeklak/TableTennisTournamentSoftware",
+                "Über", JOptionPane.INFORMATION_MESSAGE));
+        helpMenu.add(aboutItem);
+        menuBar.add(helpMenu);
         setJMenuBar(menuBar);
         this.loadMenuItem = loadTournamentItem;
     }
@@ -208,21 +236,27 @@ public class TournamentView extends JFrame {
     }
 
     /**
-     * Returns the player list component.
+     * Returns the participant table (name, club, TTR).
      *
-     * @return the player {@link JList}
+     * @return the table
      */
-    public JList<String> getPlayerJList() {
-        return playerJList;
+    public JTable getPlayerTable() {
+        return playerTable;
     }
 
     /**
-     * Returns the list model backing the player list.
+     * Shows the participants: one row {name, club, TTR} per participant, and their number.
      *
-     * @return the player list model
+     * @param rows    the rows
+     * @param doubles {@code true} for pairs
      */
-    public DefaultListModel<String> getPlayerListModel() {
-        return playerListModel;
+    public void showParticipants(java.util.List<Object[]> rows, boolean doubles) {
+        playerTableModel.setRowCount(0);
+        rows.forEach(playerTableModel::addRow);
+        playerCountLabel.setText(rows.isEmpty()
+                ? "Noch keine Teilnehmer – „" + (doubles ? "+ Doppel" : "+ Spieler") + " hinzufügen“ oder Datei → Teilnehmer importieren"
+                : rows.size() + (doubles ? " Doppel" : " Teilnehmer") + ", nach TTR sortiert");
+        UITheme.setNameColumnWide(playerTable, 0);
     }
 
     /**
@@ -261,12 +295,20 @@ public class TournamentView extends JFrame {
 
     private void updateModeFields() {
         Object mode = modeBox.getSelectedItem();
-        roundCountField.setEnabled(MODE_SWISS.equals(mode));
+        // only the fields of the chosen format are shown
+        boolean swiss = MODE_SWISS.equals(mode);
+        roundCountLabel.setVisible(swiss);
+        roundCountField.setVisible(swiss);
+        roundCountField.setEnabled(swiss);
         boolean groups = MODE_GROUPS_KO.equals(mode);
+        groupSizeLabel.setVisible(groups);
+        groupRow.setVisible(groups);
         groupSizeField.setEnabled(groups);
         qualifiersField.setEnabled(groups);
         bestNextField.setEnabled(groups);
         thirdPlaceBox.setEnabled(groups);
+        revalidate();
+        repaint();
     }
 
     /**
