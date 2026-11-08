@@ -526,12 +526,15 @@ public class TournamentRound {
         // a withdrawal in the knockout stage does not move anybody up
         // also left out: withdrawn players who are not (any more) in the bracket, e.g. after the
         // knockout draw was taken back and drawn again without them
-        Set<Player> struck = new HashSet<>(pairingEngine.annulledPlayers());
-        pairingEngine.getWithdrawn().stream().filter(p -> !groupKo.bracket().contains(p)).forEach(struck::add);
+        // computed like the draw (PairingEngine.rankedGroups): the direct comparison still includes
+        // knockout withdrawals, they are left out afterwards
+        Set<Player> struck = pairingEngine.annulledPlayers();
+        Set<Player> leftOut = new HashSet<>(struck);
+        pairingEngine.getWithdrawn().stream().filter(p -> !groupKo.bracket().contains(p)).forEach(leftOut::add);
         List<List<Player>> ranked = new ArrayList<>();
         for (List<Player> group : groupKo.groups()) {
             ranked.add(Standings.computeWithout(group, TournamentMode.ROUND_ROBIN, countingMatches(), struck).stream()
-                    .map(Standings.Entry::player).filter(p -> !struck.contains(p)).toList());
+                    .map(Standings.Entry::player).filter(p -> !leftOut.contains(p)).toList());
         }
         Set<Player> qualified = new HashSet<>();
         GroupKnockout.qualifiers(ranked, groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced()).forEach(qualified::addAll);

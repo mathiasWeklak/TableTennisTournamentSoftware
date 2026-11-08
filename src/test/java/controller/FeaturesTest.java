@@ -247,6 +247,26 @@ public class FeaturesTest {
     }
 
     @Test
+    public void csv_differentColumnNamesPerPerson() {
+        String names = "Vorname;Name;Verein;TTR;Vorname;Nachname;Verein;TTR\nAnna;Becker;A;1000;Lena;Krause;B;2000\n";
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse(names, true, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals("Anna Becker / Lena Krause", r.players().getFirst().getFullName());
+
+        String ttr = "Vorname;Nachname;Verein;Q-TTR;Vorname;Nachname;Verein;TTR\nAnna;Becker;A;1000;Lena;Krause;B;2000\n";
+        ParticipantCsv.ImportResult t = ParticipantCsv.parse(ttr, true, List.of());
+        assertEquals(1000, t.players().getFirst().getOwnTtr());
+        assertEquals(2000, t.players().getFirst().getPartnerTtr());
+    }
+
+    @Test
+    public void csv_singlesWithTwoTextColumnsIsNotTakenForDoubles() {
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse("Max;Muster;TTC;1500;m;Herren\n", false, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals(1, r.players().size());
+    }
+
+    @Test
     public void csv_separatorLineBeforeHeader() {
         ParticipantCsv.ImportResult r = ParticipantCsv.parse(";;;\nVorname;Nachname;Verein;TTR\nAnna;Becker;A;1\n", false, List.of());
         assertEquals(List.of(), r.errors());

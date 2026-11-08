@@ -75,17 +75,17 @@ public final class ParticipantCsv {
         int[][] columns = new int[persons][];
         List<String> header = split(lines[first], separator);
         int start = first;
-        if (!doubles && (isHeader(header) ? column(header, 1, "vorname") >= 0 : hasPartnerColumns(lines, first, separator))) {
+        if (!doubles && (isHeader(header) ? column(header, 1, 2, "vorname") >= 0 : hasPartnerColumns(lines, first, separator))) {
             return new ImportResult(players, List.of("Die Datei enthält Doppel (zwei Personen je Zeile). "
                     + "Bitte zuerst „Doppel“ anhaken und dann importieren."));
         }
         if (isHeader(header)) {
             for (int person = 0; person < persons; person++) {
                 columns[person] = new int[]{
-                        column(header, person, "vorname"),
-                        column(header, person, "nachname", "name"),
-                        column(header, person, "verein", "club"),
-                        column(header, person, "ttr", "qttr")};
+                        column(header, person, persons, "vorname"),
+                        column(header, person, persons, "nachname", "name"),
+                        column(header, person, persons, "verein", "club"),
+                        column(header, person, persons, "ttr", "qttr")};
                 if (columns[person][0] < 0 || columns[person][1] < 0) {
                     return new ImportResult(players, List.of("Spalten „Vorname“ und „Nachname“"
                             + (doubles ? " (für beide Personen)" : "") + " nicht gefunden."));
@@ -200,28 +200,36 @@ public final class ParticipantCsv {
                 .anyMatch(k -> k.equals("vorname") || k.equals("nachname") || k.equals("name"));
     }
 
-    /** Without header: a doubles file has a first and last name of a second person in fields 5 and 6. */
+    /** Without header: a doubles file has first name, last name and club of a second person in fields 5 to 7. */
     private static boolean hasPartnerColumns(String[] lines, int first, char separator) {
         for (int i = first; i < lines.length; i++) {
             List<String> fields = split(lines[i], separator);
-            // names contain letters; extra columns like year of birth or licence number do not count
-            if (field(fields, 4).matches(".*\\p{L}.*") && field(fields, 5).matches(".*\\p{L}.*")) return true;
+            // names contain letters and the partner has a club; extra columns like year of birth,
+            // licence number, sex or age class do not count
+            if (field(fields, 4).matches(".*\\p{L}.*") && field(fields, 5).matches(".*\\p{L}.*")
+                    && !field(fields, 6).isEmpty()) {
+                return true;
+            }
         }
         return false;
     }
 
     /**
-     * Index of the n-th (person) column with one of the names, -1 if missing: first the n-th
-     * column with the same name (e.g. "TTR" and "Q-TTR" both per person), otherwise the n-th
-     * column with any of the names (e.g. "Nachname" for the first and "Name" for the second person).
+     * Index of the column of a person with one of the names, -1 if missing: a name that occurs for
+     * every person is counted on its own (e.g. "TTR" and "Q-TTR" both per person), otherwise the
+     * n-th column with any of the names (e.g. "Name" for the first and "Nachname" for the second
+     * person, or "Q-TTR" and "TTR").
      */
-    private static int column(List<String> header, int person, String... names) {
+    private static int column(List<String> header, int person, int persons, String... names) {
+        // a name that occurs once per person (e.g. "TTR" and "Q-TTR" for both) is counted on its own
         for (String name : names) {
-            int seen = 0;
+            List<Integer> found = new ArrayList<>();
             for (int i = 0; i < header.size(); i++) {
-                if (key(header.get(i)).equals(name) && seen++ == person) return i;
+                if (key(header.get(i)).equals(name)) found.add(i);
             }
+            if (found.size() >= persons && person < found.size()) return found.get(person);
         }
+        // otherwise the synonyms count together (e.g. "Name" for the first, "Nachname" for the second person)
         int seen = 0;
         for (int i = 0; i < header.size(); i++) {
             String k = key(header.get(i));

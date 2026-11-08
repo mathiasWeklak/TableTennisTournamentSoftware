@@ -40,7 +40,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
-          cache: gradle   # keeps the Gradle distribution between runs
+          cache: gradle   # keeps the downloaded dependencies between runs
 
       # The Gradle wrapper does not retry a failed download (timeouts, HTTP 504 from the mirror).
       # Gradle (same version as the wrapper) is therefore downloaded with curl, which retries with
