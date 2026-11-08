@@ -242,7 +242,9 @@ public class TournamentRound {
     public void updateResultsTable() {
         scoreCalculator.setAnnulledPlayers(pairingEngine.annulledPlayers());
         scoreCalculator.calculate(playerList);
-        pairingEngine.assignFreeTables(); // waiting matches get the tables that became free
+        if (!pairingEngine.assignFreeTables().isEmpty()) {
+            closeRefereeSheets(); // waiting matches got tables: an open sheets window is outdated
+        }
         List<Standings.Entry> standings = currentStandings();
 
         boolean groups = mode == TournamentMode.GROUPS_KO;
@@ -369,7 +371,8 @@ public class TournamentRound {
             Player b = m.getSecondPlayer();
             int[] sets = m.decidedSets();
             String status = isStruck(m, struck) ? "gestrichen (zurückgezogen)" : sets != null ? sets[0] + ":" + sets[1] : "offen";
-            sb.append(m.getTableNumber() > 0 ? String.format("Tisch %2d: ", m.getTableNumber()) : "Wartet:   ")
+            boolean waits = m.getTableNumber() <= 0 && sets == null && !isStruck(m, struck);
+            sb.append(m.getTableNumber() > 0 ? String.format("Tisch %2d: ", m.getTableNumber()) : waits ? "Wartet:   " : "Tisch  –: ")
                     .append(stage)
                     .append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
                     .append(b.getFullName()).append(" (").append(b.getClub()).append(")   ")
@@ -395,12 +398,54 @@ public class TournamentRound {
     boolean bracketMatchesQualifiers() {
         GroupKoState groupKo = pairingEngine.getGroupKo();
         if (mode != TournamentMode.GROUPS_KO || groupKo == null || groupKo.bracket().isEmpty()) return false;
+        // group standings as at the draw: only players withdrawn in the group stage are struck,
+        // a withdrawal in the knockout stage does not move anybody up
+        Set<Player> struck = pairingEngine.annulledPlayers();
+        List<List<Player>> ranked = new ArrayList<>();
+        for (List<Player> group : groupKo.groups()) {
+            ranked.add(Standings.computeWithout(group, TournamentMode.ROUND_ROBIN, countingMatches(), struck).stream()
+                    .map(Standings.Entry::player).filter(p -> !struck.contains(p)).toList());
+        }
         Set<Player> qualified = new HashSet<>();
-        GroupKnockout.qualifiers(pairingEngine.rankedGroups(), groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced())
-                .forEach(qualified::addAll);
+        GroupKnockout.qualifiers(ranked, groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced()).forEach(qualified::addAll);
         Set<Player> inBracket = new HashSet<>();
-        groupKo.bracket().stream().filter(p -> p != null && !pairingEngine.getWithdrawn().contains(p)).forEach(inBracket::add);
+        groupKo.bracket().stream().filter(Objects::nonNull).forEach(inBracket::add);
         return qualified.equals(inBracket);
+    }
+
+    /**
+     * Tables on which two open matches of the current round stand (a result was deleted after its
+     * table had been given to a waiting match).
+     *
+     * @return one line per table, e.g. "Tisch 1: A – B / C – D"
+     */
+    List<String> tablesWithTwoOpenMatches() {
+        Map<Integer, List<Match>> byTable = new TreeMap<>();
+        Set<Player> struck = struckPlayers();
+        for (Match m : pairingEngine.getMatches()) {
+            if (m.getSecondPlayer() == null || m.getTableNumber() <= 0 || m.isDecided() || isStruck(m, struck)) continue;
+            byTable.computeIfAbsent(m.getTableNumber(), t -> new ArrayList<>()).add(m);
+        }
+        List<String> lines = new ArrayList<>();
+        byTable.forEach((table, list) -> {
+            if (list.size() > 1) {
+                lines.add("Tisch " + table + ": " + String.join(" / ", list.stream()
+                        .map(m -> m.getFirstPlayer().getFullName() + " – " + m.getSecondPlayer().getFullName()).toList()));
+            }
+        });
+        return lines;
+    }
+
+    /**
+     * Shows in the save line which file was loaded and where the tournament is saved from now on.
+     *
+     * @param loaded the loaded file
+     */
+    void showLoadedFrom(File loaded) {
+        File current = TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), tournamentName);
+        view.showSaveInfo(TournamentStorage.isSameFile(loaded, current)
+                ? "Geladen aus " + loaded.getAbsolutePath() + " (wird dort automatisch gespeichert)"
+                : "Geladen aus " + loaded.getName() + " – automatisch gespeichert wird in " + current.getAbsolutePath());
     }
 
     /** Players whose group or league matches are struck (none in the Swiss System). */
@@ -785,7 +830,8 @@ public class TournamentRound {
     private void backToSetup() {
         if (currentRound != 1 || pairingEngine.hasResultsInCurrentRound()) return;
         if (!confirm("Zurück zur Einrichtung?\nDie Auslosung von Runde 1 wird verworfen; Teilnehmer und Einstellungen "
-                + "bleiben erhalten.\nDanach Teilnehmer ergänzen und das Turnier neu beginnen.", "Zurück zur Einrichtung")) {
+                + "bleiben erhalten" + (pairingEngine.getWithdrawn().isEmpty() ? "" : " (ohne die zurückgezogenen)")
+                + ".\nDanach Teilnehmer ergänzen und das Turnier neu beginnen.", "Zurück zur Einrichtung")) {
             return;
         }
         GroupKoState groupKo = pairingEngine.getGroupKo();
@@ -925,25 +971,42 @@ public class TournamentRound {
     }
 
     private void exportStandings() {
+        // numbers in separate columns: Excel would read "3:1" as a time
         List<String[]> rows = new ArrayList<>();
         if (mode == TournamentMode.GROUPS_KO) {
-            rows.add(new String[]{"Gruppe", "Nr.", "Name", "Spiele", "Sätze", "Bälle", "Punkte", "Platz"});
-            for (GroupTables.Table t : groupTables(false)) {
-                int n = t.size();
-                for (Object[] r : t.rows()) {
-                    rows.add(new String[]{t.title(), String.valueOf(r[0]), String.valueOf(r[1]), String.valueOf(r[n + 2]),
-                            String.valueOf(r[n + 3]), String.valueOf(r[n + 4]), String.valueOf(r[n + 5]), String.valueOf(r[n + 6])});
+            rows.add(new String[]{"Gruppe", "Nr.", "Name", "Verein", "Platz", "Punkte", "Siege", "Niederlagen",
+                    "Sätze gewonnen", "Sätze verloren", "Bälle gewonnen", "Bälle verloren", "Hinweis"});
+            List<GroupTables.Table> tables = groupTables(false);
+            List<List<Player>> groups = pairingEngine.getGroupKo().groups();
+            Set<Player> struck = pairingEngine.annulledPlayers();
+            for (int g = 0; g < tables.size(); g++) {
+                GroupTables.Table t = tables.get(g);
+                for (int i = 0; i < groups.get(g).size(); i++) {
+                    Player p = groups.get(g).get(i);
+                    String place = String.valueOf(t.rows().get(i)[t.columns().length - 1]).replace(".", "").replace("–", "");
+                    rows.add(statsRow(new String[]{t.title(), String.valueOf(i + 1), p.getFullName(), p.getClub(), place},
+                            p, pairingEngine.getWithdrawn().contains(p) ? (struck.contains(p) ? "zurückgezogen" : "in der KO-Runde zurückgezogen") : ""));
                 }
             }
         } else {
-            DefaultTableModel model = getDefaultTableModel(currentStandings());
-            String[] header = new String[model.getColumnCount()];
-            for (int c = 0; c < header.length; c++) header[c] = model.getColumnName(c);
-            rows.add(header);
-            for (int r = 0; r < model.getRowCount(); r++) {
-                String[] row = new String[header.length];
-                for (int c = 0; c < header.length; c++) row[c] = String.valueOf(model.getValueAt(r, c));
-                rows.add(row);
+            boolean swiss = mode == TournamentMode.SWISS;
+            List<String> header = new ArrayList<>(List.of("Rang", "Name", "Verein", "Punkte", "Siege", "Niederlagen"));
+            if (swiss) header.addAll(List.of("BHZ", "fBHZ"));
+            header.addAll(List.of("Sätze gewonnen", "Sätze verloren", "Bälle gewonnen", "Bälle verloren", "Hinweis"));
+            rows.add(header.toArray(new String[0]));
+            Set<Player> struck = struckPlayers();
+            for (Standings.Entry e : currentStandings()) {
+                Player p = e.player();
+                List<String> row = new ArrayList<>(List.of(struck.contains(p) ? "" : String.valueOf(e.rank()), p.getFullName(),
+                        p.getClub(), String.valueOf(p.getPoints()), String.valueOf(p.getWins()), String.valueOf(p.getLosses())));
+                if (swiss) {
+                    row.add(Standings.formatScore(p.getBuchholz()));
+                    row.add(Standings.formatScore(p.getFeinBuchholz()));
+                }
+                row.addAll(List.of(String.valueOf(p.getSetsWon()), String.valueOf(p.getSetsLost()),
+                        String.valueOf(p.getBallsWon()), String.valueOf(p.getBallsLost()),
+                        pairingEngine.getWithdrawn().contains(p) ? "zurückgezogen" : ""));
+                rows.add(row.toArray(new String[0]));
             }
         }
         File target = CsvFiles.chooseTarget(view, mode == TournamentMode.GROUPS_KO ? "Gruppentabellen speichern" : "Rangliste speichern",
@@ -951,10 +1014,27 @@ public class TournamentRound {
         if (target != null) CsvFiles.write(view, target, ParticipantCsv.toCsv(rows));
     }
 
+    private static String[] statsRow(String[] start, Player p, String note) {
+        List<String> row = new ArrayList<>(List.of(start));
+        row.addAll(List.of(String.valueOf(p.getPoints()), String.valueOf(p.getWins()), String.valueOf(p.getLosses()),
+                String.valueOf(p.getSetsWon()), String.valueOf(p.getSetsLost()), String.valueOf(p.getBallsWon()),
+                String.valueOf(p.getBallsLost()), note));
+        return row.toArray(new String[0]);
+    }
+
     private void exportResults() {
+        List<String[]> results = resultListRows();
+        if (results.isEmpty()) {
+            JOptionPane.showMessageDialog(view, "Es sind noch keine Ergebnisse erfasst.");
+            return;
+        }
+        // sets won in separate columns: Excel would read "3:1" as a time
         List<String[]> rows = new ArrayList<>();
-        rows.add(new String[]{"Runde", "Tisch", "Spieler", "Gegner", "Ergebnis", "Sätze"});
-        rows.addAll(resultListRows());
+        rows.add(new String[]{"Runde", "Tisch", "Spieler", "Gegner", "Sätze Spieler", "Sätze Gegner", "Satzergebnisse"});
+        for (String[] r : results) {
+            String[] score = r[4].split(":");
+            rows.add(new String[]{r[0], r[1], r[2], r[3], score[0], score[1], r[5]});
+        }
         File target = CsvFiles.chooseTarget(view, "Ergebnisliste speichern",
                 TournamentStorage.sanitizeFileName(tournamentName) + "_Ergebnisse");
         if (target != null) CsvFiles.write(view, target, ParticipantCsv.toCsv(rows));

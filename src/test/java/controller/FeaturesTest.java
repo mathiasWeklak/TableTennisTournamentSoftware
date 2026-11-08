@@ -188,6 +188,68 @@ public class FeaturesTest {
         assertFalse(r.errors().isEmpty());
     }
 
+    @Test
+    public void csv_emptySeparatorLinesAreSkipped() {
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse("Vorname;Nachname;Verein;TTR\nAnna;Becker;A;1\n;;;\n ; ; ;\n", false, List.of());
+        assertEquals(1, r.players().size());
+        assertEquals(List.of(), r.errors());
+    }
+
+    @Test
+    public void csv_synonymsCountTogetherForThePartner() {
+        String text = "Vorname;Nachname;Verein;TTR;Vorname;Name;Verein;Q-TTR\nAnna;Becker;A;1500;Lena;Krause;B;1400\n";
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse(text, true, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals(1400, r.players().getFirst().getPartnerTtr());
+        assertEquals("Krause", r.players().getFirst().getPartnerLastName());
+    }
+
+    @Test
+    public void csv_doublesFileWhileSinglesIsSelected() {
+        String withHeader = "Vorname;Nachname;Verein;TTR;Vorname;Nachname;Verein;TTR\nAnna;Becker;A;1;Lena;Krause;B;2\n";
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse(withHeader, false, List.of());
+        assertTrue(r.players().isEmpty());
+        assertTrue(r.errors().getFirst().contains("Doppel"), r.errors().getFirst());
+        assertTrue(ParticipantCsv.parse("Anna;Becker;A;1;Lena;Krause;B;2\n", false, List.of()).players().isEmpty());
+    }
+
+    @Test
+    public void csv_ttrWithThousandsSeparatorAndNbsp() {
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse("Anna;Becker;A;1.234\nMax ;Müller;B; 1 567\n", false, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals(1234, r.players().get(0).getTtr());
+        assertEquals("Max", r.players().get(1).getFirstName());
+        assertEquals(1567, r.players().get(1).getTtr());
+    }
+
+    @Test
+    public void tableQueue_oldFilesWithCyclicTablesAreQueuedOnLoad() {
+        List<Player> ps = players(10);
+        List<Match> round = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            Match m = new Match(ps.get(2 * i), ps.get(2 * i + 1), i % 3 + 1); // old style: 1,2,3,1,2
+            m.setPairingInfo(1, 0, 0);
+            round.add(m);
+        }
+        PairingEngine engine = new PairingEngine(ps, 3, TournamentMode.SWISS);
+        engine.restoreState(round, round);
+        assertEquals(List.of(1, 2, 3, 0, 0), round.stream().map(Match::getTableNumber).toList());
+        win(round.get(2));
+        assertEquals(List.of(round.get(3)), engine.assignFreeTables());
+        assertEquals(3, round.get(3).getTableNumber());
+    }
+
+    @Test
+    public void pairingText_decidedMatchWithoutTableIsNotWaiting() {
+        List<Player> ps = players(4);
+        Match decided = new Match(ps.get(0), ps.get(1), 0);
+        win(decided);
+        Match waiting = new Match(ps.get(2), ps.get(3), 0);
+        String text = TournamentRound.formatPairingsWithStatus(List.of(decided, waiting), TournamentMode.SWISS, 0);
+        assertTrue(text.contains("Tisch  –: V0 N0"), text);
+        assertTrue(text.contains("Wartet:   V2 N2"), text);
+    }
+
     // --- tab titles, long placing lists ----------------------------------------------------
 
     @Test

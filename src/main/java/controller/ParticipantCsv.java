@@ -8,10 +8,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * Reads and writes participant lists as CSV (e.g. from click-TT or Excel).
@@ -76,6 +74,10 @@ public final class ParticipantCsv {
         int[][] columns = new int[persons][];
         List<String> header = split(lines[first], separator);
         int start = first;
+        if (!doubles && (isHeader(header) ? column(header, 1, "vorname") >= 0 : header.size() >= 8)) {
+            return new ImportResult(players, List.of("Die Datei enthält Doppel (zwei Personen je Zeile). "
+                    + "Bitte zuerst „Doppel“ anhaken und dann importieren."));
+        }
         if (isHeader(header)) {
             for (int person = 0; person < persons; person++) {
                 columns[person] = new int[]{
@@ -98,10 +100,12 @@ public final class ParticipantCsv {
         for (int i = start; i < lines.length; i++) {
             if (lines[i].isBlank()) continue;
             List<String> fields = split(lines[i], separator);
+            if (fields.stream().allMatch(String::isBlank)) continue; // e.g. ";;;" from Excel
             String[][] person = new String[persons][];
             for (int p = 0; p < persons; p++) {
                 person[p] = new String[4];
                 for (int f = 0; f < 4; f++) person[p][f] = field(fields, columns[p][f]);
+                person[p][3] = normalizeTtr(person[p][3]);
             }
             List<Player> others = new ArrayList<>(existing);
             others.addAll(players);
@@ -163,12 +167,18 @@ public final class ParticipantCsv {
     }
 
     private static Player player(String[] person) {
-        String ttr = person[3].trim();
+        String ttr = person[3];
         return new Player(person[0].strip(), person[1].strip(), person[2].strip(), ttr.isEmpty() ? 0 : Integer.parseInt(ttr));
     }
 
     private static String field(List<String> fields, int index) {
-        return index >= 0 && index < fields.size() ? fields.get(index).strip() : "";
+        // non-breaking spaces (Excel) count as spaces
+        return index >= 0 && index < fields.size() ? fields.get(index).replace('\u00A0', ' ').strip() : "";
+    }
+
+    /** TTR as written by Excel: "1.234" or "1 234" become "1234". */
+    private static String normalizeTtr(String ttr) {
+        return ttr.matches("\\d{1,3}([. ]\\d{3})+") ? ttr.replaceAll("[. ]", "") : ttr;
     }
 
     private static char detectSeparator(String line) {
@@ -189,15 +199,15 @@ public final class ParticipantCsv {
                 .anyMatch(k -> k.equals("vorname") || k.equals("nachname") || k.equals("name"));
     }
 
-    /** Index of the n-th (person) column with one of the names, -1 if missing. */
+    /** Index of the n-th (person) column with one of the names (synonyms count together), -1 if missing. */
     private static int column(List<String> header, int person, String... names) {
-        Map<String, Integer> seen = new HashMap<>();
+        int seen = 0;
         for (int i = 0; i < header.size(); i++) {
             String k = key(header.get(i));
             for (String name : names) {
                 if (k.equals(name)) {
-                    int n = seen.merge(name, 1, Integer::sum) - 1;
-                    if (n == person) return i;
+                    if (seen++ == person) return i;
+                    break;
                 }
             }
         }

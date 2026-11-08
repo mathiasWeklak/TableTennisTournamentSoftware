@@ -51,6 +51,7 @@ final class CsvFiles {
     static void write(Component parent, File file, String csv) {
         try {
             Files.writeString(file.toPath(), "\uFEFF" + csv, StandardCharsets.UTF_8);
+            JOptionPane.showMessageDialog(parent, "Gespeichert:\n" + file.getAbsolutePath());
         } catch (IOException e) {
             JOptionPane.showMessageDialog(parent, "Fehler beim Speichern nach:\n" + file.getAbsolutePath()
                     + "\n\n" + e.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);

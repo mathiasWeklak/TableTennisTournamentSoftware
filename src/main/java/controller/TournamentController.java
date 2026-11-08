@@ -379,6 +379,7 @@ public class TournamentController {
                 if (!confirmReplacingCurrentState(file, state)) return;
 
                 TournamentRound round = TournamentRound.fromSavedState(state);
+                round.showLoadedFrom(file);
                 round.setVisible(true);
                 view.dispose();
 

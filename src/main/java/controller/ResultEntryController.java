@@ -94,9 +94,23 @@ public class ResultEntryController {
                 .map(m -> "Tisch " + m.getTableNumber() + ": " + m.getFirstPlayer().getFullName()
                         + " – " + m.getSecondPlayer().getFullName())
                 .toList();
-        if (!called.isEmpty()) {
-            JOptionPane.showMessageDialog(view, "Jetzt aufrufen:\n\n" + String.join("\n", called),
-                    "Tisch frei", JOptionPane.INFORMATION_MESSAGE);
+        if (!called.isEmpty()) view.refreshTabTitles();
+
+        // first the feedback on the own input, then consequences, last the next call
+        if (!problems.isEmpty()) {
+            JOptionPane.showMessageDialog(view,
+                    "Ergebnisse gespeichert, aber folgende Eingaben sind ungültig und werden nicht gewertet:\n\n"
+                            + String.join("\n", problems),
+                    "Ungültige Satzergebnisse", JOptionPane.WARNING_MESSAGE);
+        } else if (showConfirmation && called.isEmpty()) {
+            JOptionPane.showMessageDialog(view, "Ergebnisse gespeichert.");
+        }
+        if (!blocked.isEmpty()) {
+            JOptionPane.showMessageDialog(view,
+                    "Diese Ergebnisse wurden nicht geändert, weil der Sieger schon in der nächsten KO-Runde steht:\n\n"
+                            + String.join("\n", blocked)
+                            + "\n\nUm den Sieger zu ändern, bitte zuerst die Auslosung der nächsten Runde zurücknehmen.",
+                    "KO-Ergebnis gesperrt", JOptionPane.WARNING_MESSAGE);
         }
         if (bracketMatchedQualifiers && !tournamentRound.bracketMatchesQualifiers()) {
             JOptionPane.showMessageDialog(view,
@@ -106,20 +120,17 @@ public class ResultEntryController {
                             + "(möglich, solange dort noch kein Ergebnis eingetragen ist).",
                     "Weiterkommende geändert", JOptionPane.WARNING_MESSAGE);
         }
-        if (!blocked.isEmpty()) {
+        List<String> doubleTables = tournamentRound.tablesWithTwoOpenMatches();
+        if (!doubleTables.isEmpty()) {
             JOptionPane.showMessageDialog(view,
-                    "Diese Ergebnisse wurden nicht geändert, weil der Sieger schon in der nächsten KO-Runde steht:\n\n"
-                            + String.join("\n", blocked)
-                            + "\n\nUm den Sieger zu ändern, bitte zuerst die Auslosung der nächsten Runde zurücknehmen.",
-                    "KO-Ergebnis gesperrt", JOptionPane.WARNING_MESSAGE);
+                    "Ein Ergebnis wurde wieder geöffnet, sein Tisch ist inzwischen neu vergeben:\n\n"
+                            + String.join("\n", doubleTables)
+                            + "\n\nBitte das richtige Ergebnis erfassen; der Tisch bleibt dem laufenden Spiel.",
+                    "Tisch doppelt", JOptionPane.INFORMATION_MESSAGE);
         }
-        if (!problems.isEmpty()) {
-            JOptionPane.showMessageDialog(view,
-                    "Ergebnisse gespeichert, aber folgende Eingaben sind ungültig und werden nicht gewertet:\n\n"
-                            + String.join("\n", problems),
-                    "Ungültige Satzergebnisse", JOptionPane.WARNING_MESSAGE);
-        } else if (showConfirmation) {
-            JOptionPane.showMessageDialog(view, "Ergebnisse gespeichert.");
+        if (!called.isEmpty()) {
+            JOptionPane.showMessageDialog(view, (showConfirmation && problems.isEmpty() ? "Ergebnisse gespeichert.\n\n" : "")
+                    + "Jetzt aufrufen:\n\n" + String.join("\n", called), "Tisch frei", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 

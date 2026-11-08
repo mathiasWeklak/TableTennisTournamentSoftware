@@ -193,6 +193,30 @@ public class ResultEntryView extends JDialog {
      * @param matchPanel the match panel
      * @param complete   {@code true} if the entered result is a complete, valid match result
      */
+    public void refreshTabTitles() {
+        List<Player> inRound = new ArrayList<>();
+        for (ResultEntryController.MatchPanelData data : getMatchPanelData()) {
+            inRound.add(data.match().getFirstPlayer());
+            inRound.add(data.match().getSecondPlayer());
+        }
+        java.util.Map<Player, String> shortNames = Player.uniqueShortNames(inRound);
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (!(tabbedPane.getComponentAt(i) instanceof JPanel panel)
+                    || !(panel.getClientProperty("matchData") instanceof ResultEntryController.MatchPanelData data)) {
+                continue;
+            }
+            String title = ResultEntryController.tabTitle(data.match(), shortNames);
+            panel.putClientProperty("baseTitle", title);
+            tabbedPane.setTitleAt(i, title);
+        }
+    }
+
+    /**
+     * Marks a match tab as complete or not.
+     *
+     * @param matchPanel the match panel
+     * @param complete   {@code true} if the match is decided
+     */
     public void markTab(JPanel matchPanel, boolean complete) {
         int index = tabbedPane.indexOfComponent(matchPanel);
         if (index < 0) return;
