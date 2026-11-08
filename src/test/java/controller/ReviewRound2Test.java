@@ -161,6 +161,42 @@ public class ReviewRound2Test {
     }
 
     @Test
+    public void bothFinalistsWithdrawBeforeTheDraw_bothAreSecond() {
+        Cup cup = new Cup(8, 4, 2, false);
+        for (int i = 0; i < 4; i++) assertTrue(cup.next());
+        Match semi0 = GroupKnockout.find(cup.ko(), 1, 0, false);
+        Match semi1 = GroupKnockout.find(cup.ko(), 1, 1, false);
+        cup.engine.withdraw(semi0.getWinner());
+        cup.engine.withdraw(semi1.getWinner());
+        cup.engine.generateNextRound(5); // nobody left for the final: the tournament ends
+        List<Map.Entry<Player, Integer>> placing = GroupKnockout.finalPlacing(cup.ko(), 2);
+        assertTrue(placing.contains(Map.entry(semi0.getWinner(), 2)));
+        assertTrue(placing.contains(Map.entry(semi1.getWinner(), 2)));
+        assertTrue(placing.contains(Map.entry(semi0.getLoser(), 3)));
+        assertEquals(4, placing.size());
+    }
+
+    @Test
+    public void bothSemiFinalistsOfOneSlotWithdrawBeforeTheDraw_bothGetSemiFinalPlace() {
+        Cup cup = new Cup(16, 4, 2, false);
+        for (int i = 0; i < 4; i++) assertTrue(cup.next()); // 3 group rounds + quarter-finals
+        Match qf0 = GroupKnockout.find(cup.ko(), 1, 0, false);
+        Match qf1 = GroupKnockout.find(cup.ko(), 1, 1, false);
+        cup.engine.withdraw(qf0.getWinner());
+        cup.engine.withdraw(qf1.getWinner());
+        while (cup.next()) {
+            assertTrue(cup.round < 20);
+        }
+        List<Map.Entry<Player, Integer>> placing = GroupKnockout.finalPlacing(cup.ko(), 3);
+        assertTrue(placing.contains(Map.entry(qf0.getWinner(), 3)));
+        assertTrue(placing.contains(Map.entry(qf1.getWinner(), 3)));
+        assertEquals(1, placing.stream().filter(e -> e.getValue() == 1).count());
+        assertEquals(0, placing.stream().filter(e -> e.getValue() == 2).count(), "die andere Finalhälfte ist leer");
+        assertEquals(3, placing.stream().filter(e -> e.getValue() == 3).count());
+        assertEquals(8, placing.size());
+    }
+
+    @Test
     public void wholeGroupWithdraws_singleQualifierWinsByWalkover() {
         Cup cup = new Cup(4, 2, 1, false);
         assertTrue(cup.next());

@@ -155,6 +155,26 @@ public class TournamentRound {
      * @return the round label
      */
     String roundLabel() {
+        return roundLabel(currentRound);
+    }
+
+    /**
+     * Returns the short name of a round for dialogs: "Runde 3", "Runde 2 der Vorrunde" or the
+     * knockout round name, e.g. "Halbfinale".
+     *
+     * @param round the round number
+     * @return the name
+     */
+    public String roundName(int round) {
+        if (mode == TournamentMode.GROUPS_KO) {
+            int groupRounds = pairingEngine.groupRounds();
+            if (round <= groupRounds) return "Runde " + round + " der Vorrunde";
+            return GroupKnockout.roundName(round - groupRounds, pairingEngine.knockoutRounds());
+        }
+        return "Runde " + round;
+    }
+
+    private String roundLabel(int currentRound) {
         int total = totalRounds();
         if (mode == TournamentMode.GROUPS_KO) {
             int groupRounds = pairingEngine.groupRounds();
@@ -230,7 +250,7 @@ public class TournamentRound {
             UITheme.setNameColumnWide(view.getResultsTable(), 1);
         }
 
-        String text = formatPairingsWithStatus(pairingEngine.getMatches(), mode, pairingEngine.knockoutRounds());
+        String text = formatPairingsWithStatus(pairingEngine.getMatches(), mode, pairingEngine.knockoutRounds(), struckPlayers());
         if (groups && pairingEngine.isFinished()) text += finalPlacingText();
         view.getPairingsTextArea().setText(text);
         view.getPairingsTextArea().setCaretPosition(0);
@@ -265,6 +285,10 @@ public class TournamentRound {
         boolean finished = pairingEngine.isFinished();
         view.showRound(roundLabel(), finished);
         view.getNextRoundButton().setEnabled(!finished);
+        int total = totalRounds();
+        view.getNextRoundButton().setText(total > 0 && currentRound >= total ? "Turnier abschließen"
+                : mode == TournamentMode.GROUPS_KO && currentRound == pairingEngine.groupRounds() ? "KO-Runde auslosen"
+                : "Nächste Runde auslosen");
         view.getUndoRoundButton().setEnabled(pairingEngine.canUndoLastRound());
         view.getWithdrawPlayerButton().setEnabled(!finished);
         // a late registration is paired from the next round on: not in the last planned round
@@ -272,7 +296,8 @@ public class TournamentRound {
             view.getAddPlayerButton().setEnabled(!finished && (plannedRounds == 0 || currentRound < plannedRounds));
         }
         if (view.getManipulateButton() != null) view.getManipulateButton().setEnabled(!finished);
-        boolean hasMatches = pairingEngine.getMatches().stream().anyMatch(m -> m.getSecondPlayer() != null);
+        Set<Player> struck = struckPlayers();
+        boolean hasMatches = pairingEngine.getMatches().stream().anyMatch(m -> m.getSecondPlayer() != null && !isStruck(m, struck));
         view.getPreviewRefereeSheetsButton().setEnabled(hasMatches && !finished);
         view.getResultEntryButton().setEnabled(hasMatches || currentRound > 1);
     }
@@ -299,9 +324,23 @@ public class TournamentRound {
      * @return the text for the pairings area
      */
     static String formatPairingsWithStatus(List<Match> matches, TournamentMode mode, int koRounds) {
+        return formatPairingsWithStatus(matches, mode, koRounds, Set.of());
+    }
+
+    /**
+     * Formats the current round's pairings with their result status; matches of withdrawn players
+     * whose matches are struck are shown as "gestrichen" and do not count as open.
+     *
+     * @param matches   the current round's matches
+     * @param mode      the tournament mode
+     * @param koRounds  number of knockout rounds (for the round names), 0 if not relevant
+     * @param struck    players whose group or league matches are struck
+     * @return the text for the pairings area
+     */
+    static String formatPairingsWithStatus(List<Match> matches, TournamentMode mode, int koRounds, Set<Player> struck) {
         StringBuilder sb = new StringBuilder();
         long open = matches.stream()
-                .filter(m -> m.getSecondPlayer() != null && !m.isDecided())
+                .filter(m -> m.getSecondPlayer() != null && !m.isDecided() && !isStruck(m, struck))
                 .count();
         for (Match m : matches) {
             Player a = m.getFirstPlayer();
@@ -317,7 +356,7 @@ public class TournamentRound {
             }
             Player b = m.getSecondPlayer();
             int[] sets = m.decidedSets();
-            String status = sets != null ? sets[0] + ":" + sets[1] : "offen";
+            String status = isStruck(m, struck) ? "gestrichen (zurückgezogen)" : sets != null ? sets[0] + ":" + sets[1] : "offen";
             sb.append(String.format("Tisch %2d: ", m.getTableNumber()))
                     .append(stage)
                     .append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
@@ -328,6 +367,16 @@ public class TournamentRound {
             sb.append('\n').append(open == 0 ? "Alle Ergebnisse erfasst." : open + " Begegnung(en) offen.");
         }
         return sb.toString();
+    }
+
+    private static boolean isStruck(Match m, Set<Player> struck) {
+        return m.getKoRound() == 0 && m.getSecondPlayer() != null
+                && (struck.contains(m.getFirstPlayer()) || struck.contains(m.getSecondPlayer()));
+    }
+
+    /** Players whose group or league matches are struck (none in the Swiss System). */
+    private Set<Player> struckPlayers() {
+        return mode == TournamentMode.SWISS ? Set.of() : pairingEngine.annulledPlayers();
     }
 
     private static String stageLabel(Match m, int koRounds) {
@@ -446,8 +495,9 @@ public class TournamentRound {
 
     private void previewRefereeSheets() {
         closeRefereeSheets(); // one window, always with the current pairings
+        Set<Player> struck = struckPlayers();
         List<Match> matchesWithoutBye = pairingEngine.getMatches().stream()
-                .filter(match -> match.getSecondPlayer() != null)
+                .filter(match -> match.getSecondPlayer() != null && !isStruck(match, struck))
                 .toList();
         // on the sheet "Runde 3" is enough (no "von 7"), so the tournament name fits next to it
         refereeSheets = new RefereeSheetsController(view, matchesWithoutBye, tournamentName,
@@ -489,7 +539,7 @@ public class TournamentRound {
         if (!open.isEmpty()) {
             JOptionPane.showMessageDialog(view,
                     "Es gibt noch unbeendete oder ungültig erfasste Begegnungen. Bitte alle Ergebnisse vollständig erfassen\n"
-                            + "(ein Spieler muss 3 Sätze gewonnen haben), bevor die nächste Runde gestartet werden kann:\n\n"
+                            + "(eine Seite muss 3 Sätze gewonnen haben), bevor die nächste Runde gestartet werden kann:\n\n"
                             + String.join("\n", open.subList(0, Math.min(15, open.size())))
                             + (open.size() > 15 ? "\n…" : ""),
                     "Unbeendete Begegnungen", JOptionPane.WARNING_MESSAGE);
@@ -501,17 +551,18 @@ public class TournamentRound {
             String text = mode == TournamentMode.GROUPS_KO
                     ? "Das Finale ist gespielt.\nTurnier jetzt abschließen?"
                     : mode == TournamentMode.ROUND_ROBIN
-                    ? "Alle " + total + " Runden sind gespielt.\nTurnier jetzt abschließen?"
+                    ? (total == 1 ? "Die einzige Runde ist gespielt." : "Alle " + total + " Runden sind gespielt.")
+                    + "\nTurnier jetzt abschließen?"
                     : "Runde " + currentRound + " war die letzte geplante Runde.\nTurnier jetzt abschließen?";
             if (confirm(text, "Turnier abschließen")) {
-                finishTournament("Das Turnier ist nach " + currentRound + " Runden beendet.");
+                finishTournament("Das Turnier ist nach " + rounds(currentRound) + " beendet.");
             }
             return;
         }
 
         String question = mode == TournamentMode.GROUPS_KO && currentRound == pairingEngine.groupRounds()
                 ? "Vorrunde abschließen und die KO-Runde auslosen?"
-                : "Runde " + currentRound + " abschließen und Runde " + (currentRound + 1) + " auslosen?";
+                : roundName(currentRound) + " abschließen und " + roundName(currentRound + 1) + " auslosen?";
         if (!confirm(question, "Nächste Runde")) {
             return;
         }
@@ -526,13 +577,17 @@ public class TournamentRound {
                     : mode == TournamentMode.GROUPS_KO
                     ? "Die KO-Runde ist beendet."
                     : "Es ist keine weitere Runde ohne Wiederholungsbegegnung möglich.";
-            finishTournament(reason + "\nDas Turnier ist nach " + currentRound + " Runden beendet.");
+            finishTournament(reason + "\nDas Turnier ist nach " + rounds(currentRound) + " beendet.");
             return;
         }
         currentRound++;
         closeRefereeSheets();
         updateResultsTable();
         saveTournamentState();
+    }
+
+    private static String rounds(int n) {
+        return n == 1 ? "1 Runde" : n + " Runden";
     }
 
     private void finishTournament(String message) {
@@ -544,8 +599,8 @@ public class TournamentRound {
 
     private void undoLastRound() {
         if (!pairingEngine.canUndoLastRound()) return;
-        if (!confirm("Die Auslosung von Runde " + currentRound + " zurücknehmen?\n"
-                + "Runde " + (currentRound - 1) + " wird wieder die aktuelle Runde.", "Auslosung zurücknehmen")) {
+        if (!confirm("Die Auslosung zurücknehmen (" + roundName(currentRound) + ")?\n"
+                + "Danach ist wieder " + roundName(currentRound - 1) + " die aktuelle Runde.", "Auslosung zurücknehmen")) {
             return;
         }
         pairingEngine.undoLastRound();
@@ -737,7 +792,9 @@ public class TournamentRound {
      * @return the matches
      */
     public List<Match> matchesOfRound(int round) {
-        return round == currentRound ? pairingEngine.getMatches() : pairingEngine.getMatchesOfRound(round);
+        List<Match> matches = round == currentRound ? pairingEngine.getMatches() : pairingEngine.getMatchesOfRound(round);
+        Set<Player> struck = struckPlayers();
+        return struck.isEmpty() ? matches : matches.stream().filter(m -> !isStruck(m, struck)).toList();
     }
 
     // ---------------------------------------------------------------------------------------

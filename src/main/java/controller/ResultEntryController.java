@@ -133,6 +133,16 @@ public class ResultEntryController {
     }
 
     /**
+     * Returns the name of a round for the round selector, e.g. "Halbfinale".
+     *
+     * @param round the round number
+     * @return the name
+     */
+    public String roundName(int round) {
+        return tournamentRound.roundName(round);
+    }
+
+    /**
      * Returns {@code true} if any field differs from the stored results of its match.
      *
      * @return {@code true} if there are unsaved changes

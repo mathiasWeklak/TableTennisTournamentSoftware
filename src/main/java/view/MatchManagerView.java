@@ -32,7 +32,7 @@ public class MatchManagerView extends JDialog {
      */
     public MatchManagerView(Window owner, DefaultListModel<Match> possibleMatchesModel,
                             DefaultListModel<Match> selectedMatchesModel, int playerCount) {
-        super(owner, "Begegnungs Manager", ModalityType.APPLICATION_MODAL);
+        super(owner, "Begegnungen festlegen", ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         UITheme.sizeToScreen(this, 680, 750);
         setLocationRelativeTo(owner);

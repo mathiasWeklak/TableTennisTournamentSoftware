@@ -63,6 +63,15 @@ public class ResultEntryView extends JDialog {
         JComboBox<Integer> roundBox = new JComboBox<>(rounds.toArray(new Integer[0]));
         roundBox.setSelectedItem(initialRound);
         roundBox.setFocusable(false);
+        roundBox.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Integer round && controller != null) setText(controller.roundName(round));
+                return this;
+            }
+        });
         roundBox.addActionListener(_ -> {
             Integer selected = (Integer) roundBox.getSelectedItem();
             if (selected != null && !controller.switchRound(selected)) {
@@ -326,7 +335,7 @@ public class ResultEntryView extends JDialog {
             for (int j = 0; j < 2; j++) {
                 JTextField field = setResultsFields[i][j];
                 field.getDocument().addDocumentListener(new ResultDocumentListener(matchPanel));
-                addKeyboardBehavior(field, i == MAX_SETS - 1 && j == 1);
+                addKeyboardBehavior(field, i == MAX_SETS - 1 && j == 1, j == 1 ? setResultsFields : null);
             }
         }
 
@@ -417,7 +426,7 @@ public class ResultEntryView extends JDialog {
      * Selects the field content on focus (so typing replaces a wrong value) and makes Enter move
      * to the next field; from the last field of a match Enter moves to the next match.
      */
-    private void addKeyboardBehavior(JTextField field, boolean lastFieldOfMatch) {
+    private void addKeyboardBehavior(JTextField field, boolean lastFieldOfMatch, JTextField[][] decidedCheck) {
         field.addFocusListener(new FocusAdapter() {
             @Override
             public void focusGained(FocusEvent e) {
@@ -425,7 +434,8 @@ public class ResultEntryView extends JDialog {
             }
         });
         field.addActionListener(_ -> {
-            if (lastFieldOfMatch) {
+            // a decided match (3 sets won): Enter in the second score of a set goes to the next match
+            if (lastFieldOfMatch || (decidedCheck != null && model.ResultRules.isComplete(texts(decidedCheck)))) {
                 int next = tabbedPane.getSelectedIndex() + 1;
                 if (next < tabbedPane.getTabCount()) {
                     tabbedPane.setSelectedIndex(next);
@@ -435,6 +445,15 @@ public class ResultEntryView extends JDialog {
                 field.transferFocus();
             }
         });
+    }
+
+    private static String[][] texts(JTextField[][] fields) {
+        String[][] sets = new String[MAX_SETS][2];
+        for (int i = 0; i < MAX_SETS; i++) {
+            sets[i][0] = fields[i][0].getText();
+            sets[i][1] = fields[i][1].getText();
+        }
+        return sets;
     }
 
     /**

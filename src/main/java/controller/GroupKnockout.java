@@ -424,17 +424,9 @@ public final class GroupKnockout {
         Match finalMatch = find(koMatches, totalRounds, 0, false);
         if (finalMatch != null && finalMatch.getWinner() != null) {
             result.add(Map.entry(finalMatch.getWinner(), 1));
-            Player loser = loserOf(koMatches, finalMatch);
-            if (loser != null) result.add(Map.entry(loser, 2));
         }
-        List<Player> semiLosers = new ArrayList<>();
-        if (totalRounds >= 2) {
-            for (Match semi : koMatches) {
-                if (semi.getKoRound() != totalRounds - 1 || semi.isThirdPlace()) continue;
-                Player loser = loserOf(koMatches, semi);
-                if (loser != null) semiLosers.add(loser);
-            }
-        }
+        losersOfRound(koMatches, totalRounds).forEach(loser -> result.add(Map.entry(loser, 2)));
+        List<Player> semiLosers = totalRounds >= 2 ? losersOfRound(koMatches, totalRounds - 1) : List.of();
         Match third = find(koMatches, totalRounds, 0, true);
         if (third != null && third.getWinner() != null) {
             result.add(Map.entry(third.getWinner(), 3));
@@ -447,13 +439,44 @@ public final class GroupKnockout {
         }
         for (int r = totalRounds - 2; r >= 1; r--) {
             int place = (1 << (totalRounds - r)) + 1; // quarter-final losers 5, round of 16 losers 9, ...
-            for (Match m : koMatches) {
-                if (m.getKoRound() != r || m.isThirdPlace()) continue;
-                Player loser = loserOf(koMatches, m);
-                if (loser != null) result.add(Map.entry(loser, place));
-            }
+            for (Player loser : losersOfRound(koMatches, r)) result.add(Map.entry(loser, place));
         }
         return result;
+    }
+
+    /**
+     * Returns the losers of a knockout round, determined by the bracket position: of the two
+     * participants who reach a slot (winners of the two matches below it), everyone who does not
+     * win the slot loses this round, also by walkover (bye for the opponent, or no match at all
+     * because both withdrew before the draw). An undecided match has no loser yet.
+     */
+    private static List<Player> losersOfRound(List<Match> koMatches, int round) {
+        List<Player> losers = new ArrayList<>();
+        if (round <= 1) {
+            for (Match m : koMatches) {
+                if (m.getKoRound() == 1 && !m.isThirdPlace() && m.getLoser() != null) losers.add(m.getLoser());
+            }
+            return losers;
+        }
+        // the round is due once it was drawn or the round before is complete (a round without any
+        // match, because everybody withdrew, is never drawn)
+        boolean due = koMatches.stream().anyMatch(m -> m.getKoRound() >= round)
+                || koMatches.stream().filter(m -> m.getKoRound() == round - 1 && !m.isThirdPlace())
+                .allMatch(m -> m.getSecondPlayer() == null || m.isDecided());
+        if (!due) return losers;
+        int previousSlots = koMatches.stream().filter(m -> m.getKoRound() == round - 1 && !m.isThirdPlace())
+                .mapToInt(Match::getKoSlot).max().orElse(-1) + 1;
+        for (int slot = 0; 2 * slot < previousSlots; slot++) {
+            Match m = find(koMatches, round, slot, false);
+            if (m != null && m.getSecondPlayer() != null && !m.isDecided()) continue;
+            Player slotWinner = m == null ? null : m.getWinner();
+            for (int below = 2 * slot; below <= 2 * slot + 1; below++) {
+                Match previous = find(koMatches, round - 1, below, false);
+                Player reached = previous == null ? null : previous.getWinner();
+                if (reached != null && !reached.equals(slotWinner)) losers.add(reached);
+            }
+        }
+        return losers;
     }
 
     /**

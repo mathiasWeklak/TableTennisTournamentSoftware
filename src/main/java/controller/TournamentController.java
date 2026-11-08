@@ -88,7 +88,8 @@ public class TournamentController {
     private void editPlayer() {
         int selectedIndex = view.getPlayerJList().getSelectedIndex();
         if (selectedIndex == -1) {
-            JOptionPane.showMessageDialog(view, "Bitte wählen Sie einen Spieler aus der Liste aus.");
+            JOptionPane.showMessageDialog(view, doubles() ? "Bitte wählen Sie ein Doppel aus der Liste aus."
+                    : "Bitte wählen Sie einen Spieler aus der Liste aus.");
             return;
         }
         Player existing = playerList.get(selectedIndex);
@@ -127,13 +128,14 @@ public class TournamentController {
             Player player = playerList.get(selectedIndex);
             int answer = JOptionPane.showConfirmDialog(view,
                     player.getFullName() + " (" + player.getClub() + ") wirklich entfernen?",
-                    "Spieler entfernen", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                    doubles() ? "Doppel entfernen" : "Spieler entfernen", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
             if (answer == JOptionPane.YES_OPTION) {
                 playerList.remove(selectedIndex);
                 updatePlayerList();
             }
         } else {
-            JOptionPane.showMessageDialog(view, "Bitte wählen Sie einen Spieler aus der Liste aus.");
+            JOptionPane.showMessageDialog(view, doubles() ? "Bitte wählen Sie ein Doppel aus der Liste aus."
+                    : "Bitte wählen Sie einen Spieler aus der Liste aus.");
         }
     }
 
@@ -177,11 +179,12 @@ public class TournamentController {
             return "In der kleinsten Gruppe sind nur " + smallest + " Teilnehmer.\n"
                     + "Es müssen weniger als " + smallest + " je Gruppe weiterkommen.";
         }
-        if (bestNext > groups.size()) {
-            return "Es gibt nur " + groups.size() + " Gruppen, also höchstens " + groups.size() + " Nächstplatzierte.";
+        if (bestNext > 0 && groups.size() == 1) {
+            return "Bei nur einer Gruppe gibt es keine besten Nächstplatzierten. Bitte 0 eintragen.";
         }
-        if (bestNext == groups.size()) {
-            return "Wenn alle Nächstplatzierten weiterkommen, bitte stattdessen „weiter je Gruppe“ erhöhen.";
+        if (bestNext >= groups.size()) {
+            return "Bei " + groups.size() + " Gruppen können höchstens " + (groups.size() - 1) + " Nächstplatzierte weiterkommen."
+                    + (perGroup + 1 < smallest ? "\nSollen alle weiterkommen, bitte stattdessen „weiter je Gruppe“ erhöhen." : "");
         }
         if (groups.size() * perGroup + bestNext < 2) {
             return "Für die KO-Runde müssen mindestens zwei Teilnehmer weiterkommen.";

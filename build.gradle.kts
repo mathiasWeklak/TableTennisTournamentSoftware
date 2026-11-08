@@ -6,7 +6,7 @@ plugins {
     jacoco
 }
 
-version = "1.1.0"
+version = "1.1.1"
 
 val licenseFile = project.file("LICENSE")
 

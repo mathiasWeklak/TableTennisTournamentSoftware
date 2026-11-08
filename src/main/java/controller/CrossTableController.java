@@ -123,7 +123,7 @@ public class CrossTableController {
         int n = players.size();
 
         String[] columnNames = new String[n + 1];
-        columnNames[0] = "Spieler";
+        columnNames[0] = !players.isEmpty() && players.getFirst().isDoubles() ? "Doppel" : "Spieler";
         for (int i = 0; i < n; i++) {
             columnNames[i + 1] = String.valueOf(i + 1);
         }

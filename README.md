@@ -22,7 +22,7 @@ Sie unterstützt das **Schweizer System**, den Modus **„Jeder gegen Jeden“**
 - 📋 **Turnierablauf**: Auslosung mit Rückfrage, „Auslosung zurücknehmen“ solange noch kein Ergebnis erfasst ist, optionale Rundenzahl im Schweizer System
 - 🚪 **Spieler zurückziehen** (alle Turnierformen) und **Spieler nachmelden** (Schweizer System, nicht mehr in der letzten geplanten Runde)
 - 🪑 **Automatische Tischzuweisung** für jede Begegnung
-- 🧮 **Ergebniseingabe**: satzweise mit Prüfung der Tischtennisregeln, Statusanzeige pro Spiel, Tastaturbedienung (Enter, Strg+S, Esc), „Kampflos“-Schaltflächen, Korrektur früherer Runden (ein KO-Ergebnis kann den Sieger nicht mehr ändern, sobald die nächste KO-Runde ausgelost ist)
+- 🧮 **Ergebniseingabe**: satzweise mit Prüfung der Tischtennisregeln, Statusanzeige pro Spiel, Tastaturbedienung (Enter, nach entschiedenem Spiel direkt zum nächsten Spiel; Strg+S, Esc), „Kampflos“-Schaltflächen, Korrektur früherer Runden (ein KO-Ergebnis kann den Sieger nicht mehr ändern, sobald die nächste KO-Runde ausgelost ist)
 - 🖨️ **Drucken**: Rangliste bzw. Gruppentabellen (nach Turnierende mit Endplatzierung), Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde bzw. Gruppe oder KO-Runde; lange Namen und Doppel zweizeilig)
 - 🛠️ **Manuelle Anpassung der Setzung** (nur im Schweizer System)
 - ⚠️ **Fehlerdialog** bei unerwarteten Fehlern, Details in `Turniersoftware-Fehler.log`

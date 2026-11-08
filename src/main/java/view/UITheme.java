@@ -252,7 +252,8 @@ public final class UITheme {
             }
         }
         if (nameContentWidth > 0) {
-            table.getColumnModel().getColumn(nameColumnIndex).setMinWidth(nameContentWidth);
+            // the name may be shortened ("…") in a narrow window; the number columns stay visible
+            table.getColumnModel().getColumn(nameColumnIndex).setMinWidth(Math.min(nameContentWidth, 180));
             table.getColumnModel().getColumn(nameColumnIndex).setPreferredWidth(nameContentWidth);
         }
     }

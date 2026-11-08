@@ -98,6 +98,18 @@ public class BracketController {
         };
     }
 
+    /** Number of qualifiers if nobody withdraws (a third place needs two semi-finals with a loser). */
+    private static int expectedQualifiers(GroupKoState groupKo) {
+        if (groupKo.groups().isEmpty()) return Integer.MAX_VALUE; // groups not known yet
+        int expected = 0;
+        int nextPlaced = 0;
+        for (List<Player> g : groupKo.groups()) {
+            expected += Math.min(groupKo.qualifiersPerGroup(), g.size());
+            if (g.size() > groupKo.qualifiersPerGroup()) nextPlaced++;
+        }
+        return expected + Math.min(groupKo.bestNextPlaced(), nextPlaced);
+    }
+
     static Model buildModel(GroupKoState groupKo, List<Match> allMatches) {
         if (groupKo == null || groupKo.bracket().isEmpty()) {
             String text = "Der Turnierbaum wird nach der Vorrunde ausgelost.";
@@ -109,7 +121,8 @@ public class BracketController {
                         ? " und " + (groupKo.bestNextPlaced() == 1 ? "der beste " : "die " + groupKo.bestNextPlaced() + " besten ")
                         + "Gruppen-" + placedName(groupKo.qualifiersPerGroup() + 1) + (groupKo.bestNextPlaced() == 1 ? "" : "n")
                         : "") + "."
-                        + (groupKo.thirdPlaceMatch() ? " Es gibt ein Spiel um Platz 3."
+                        + (expectedQualifiers(groupKo) < 4 ? ""
+                        : groupKo.thirdPlaceMatch() ? " Es gibt ein Spiel um Platz 3."
                         : " Ohne Spiel um Platz 3: beide Halbfinal-Verlierer werden Dritte.");
             }
             return new Model(List.of(), List.of(), null, text);
@@ -149,6 +162,15 @@ public class BracketController {
         Match third = GroupKnockout.find(ko, total, 0, true);
         Box thirdBox = third == null ? null
                 : box(third.getFirstPlayer(), third.getSecondPlayer(), third, third.getSecondPlayer() == null);
+        if (third != null && third.getSecondPlayer() == null) {
+            // walkover: show the semi-final loser who withdrew
+            for (Match semi : ko) {
+                Player loser = semi.getKoRound() == total - 1 && !semi.isThirdPlace() ? GroupKnockout.loserOf(ko, semi) : null;
+                if (loser != null && !loser.equals(third.getFirstPlayer())) {
+                    thirdBox = new Box(third.getFirstPlayer().getFullName(), loser.getFullName() + " (zurückgezogen)", "", "", 1);
+                }
+            }
+        }
         return new Model(names, rounds, thirdBox, null);
     }
 
