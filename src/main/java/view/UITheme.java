@@ -111,8 +111,8 @@ public final class UITheme {
      */
     private static void flat(JButton btn, Color normal, Color hover, Color pressed, Color text,
                              Color disabledBackground, Color disabledText) {
-        btn.setUI(new FlatButtonUI());
-        btn.setFocusPainted(false);
+        btn.setUI(new FlatButtonUI(text.equals(Color.WHITE) ? new Color(255, 255, 255, 210) : PRIMARY));
+        btn.setFocusPainted(true);
         btn.setContentAreaFilled(true);
         btn.setOpaque(true);
         btn.setRolloverEnabled(true);
@@ -130,13 +130,22 @@ public final class UITheme {
 
     /** Button UI that paints the text in the button's foreground colour, also when disabled. */
     private static final class FlatButtonUI extends javax.swing.plaf.basic.BasicButtonUI {
+        private final Color focusColor;
+
+        FlatButtonUI(Color focusColor) {
+            this.focusColor = focusColor;
+        }
+
         @Override
         protected void paintText(Graphics g, AbstractButton b, Rectangle textRect, String text) {
             Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            // the desktop's text antialiasing (e.g. ClearType), otherwise greyscale
+            Object desktopHints = Toolkit.getDefaultToolkit().getDesktopProperty("awt.font.desktophints");
+            if (desktopHints instanceof java.util.Map<?, ?> hints) g2.addRenderingHints(hints);
+            else g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g2.setColor(b.getForeground());
             g2.setFont(b.getFont());
-            FontMetrics fm = g2.getFontMetrics();
+            FontMetrics fm = b.getFontMetrics(b.getFont());
             g2.drawString(text, textRect.x, textRect.y + fm.getAscent());
         }
 
@@ -147,7 +156,12 @@ public final class UITheme {
 
         @Override
         protected void paintFocus(Graphics g, AbstractButton b, Rectangle viewRect, Rectangle textRect, Rectangle iconRect) {
-            // no focus rectangle
+            // keyboard focus: an inner ring, the size of the button stays the same
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setColor(focusColor);
+            g2.setStroke(new BasicStroke(2f));
+            g2.drawRect(3, 3, b.getWidth() - 7, b.getHeight() - 7);
+            g2.dispose();
         }
     }
 

@@ -269,7 +269,10 @@ public class TournamentRound {
             view.getResultsTable().setModel(getDefaultTableModel(standings));
             UITheme.applyTableStyling(view.getResultsTable());
             view.getResultsTable().setIntercellSpacing(new java.awt.Dimension(0, 1));
-            view.getResultsTable().putClientProperty("podium", Boolean.TRUE);
+            // places 1-3 in bold only once results exist and they do not cover most of the field
+            long onPodium = standings.stream().filter(e -> e.rank() <= 3).count();
+            boolean anyResult = playerList.stream().anyMatch(p -> p.getWins() + p.getLosses() > 0);
+            view.getResultsTable().putClientProperty("podium", anyResult && onPodium <= 4);
             UITheme.setNameColumnWide(view.getResultsTable(), 1);
         }
 
@@ -342,7 +345,17 @@ public class TournamentRound {
         if (!(mode == TournamentMode.GROUPS_KO && pairingEngine.isFinished())) {
             table.getColumnModel().getColumn(last).setCellRenderer(new UITheme.StatusRenderer());
         }
-        UITheme.setNameColumnWide(table, mode == TournamentMode.GROUPS_KO && !pairingEngine.isFinished() ? 2 : 1);
+        boolean pairings = !(mode == TournamentMode.GROUPS_KO && pairingEngine.isFinished());
+        int nameColumn = mode == TournamentMode.GROUPS_KO && pairings ? 2 : 1;
+        UITheme.setNameColumnWide(table, nameColumn);
+        if (pairings) {
+            // the opponent column shares the free width, so the result column stays visible
+            javax.swing.table.TableColumn opponent = table.getColumnModel().getColumn(nameColumn + 1);
+            opponent.setMinWidth(Math.min(opponent.getPreferredWidth(), 140));
+            opponent.setMaxWidth(Integer.MAX_VALUE);
+            table.getColumnModel().getColumn(nameColumn).setMinWidth(
+                    Math.min(table.getColumnModel().getColumn(nameColumn).getPreferredWidth(), 140));
+        }
     }
 
     private static DefaultTableModel readOnlyModel(String... columns) {

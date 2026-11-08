@@ -40,10 +40,22 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
+          cache: gradle   # keeps the Gradle distribution between runs
 
       - name: Make Gradle wrapper executable
         if: runner.os != 'Windows'
         run: chmod +x gradlew
+
+      # services.gradle.org is sometimes slow from the runners: download Gradle up front, with retries
+      - name: Download Gradle
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            ./gradlew --version --no-daemon && exit 0
+            echo "Gradle download failed (attempt $attempt), retrying in 20 s"
+            sleep 20
+          done
+          exit 1
 
       - name: Run tests
         if: matrix.label == 'linux'
@@ -59,6 +71,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true   # stop if gradlew fails
+          $ErrorActionPreference = 'Stop'
           ./gradlew jpackage --no-daemon
           New-Item -ItemType Directory -Force out | Out-Null
           Compress-Archive -Path build/dist/TT-Turniersoftware -DestinationPath "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-windows-portable.zip"
@@ -68,6 +82,8 @@ jobs:
         continue-on-error: true   # needs the WiX Toolset of the runner image; the ZIP above works without
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = 'Stop'
           ./gradlew jpackage -PinstallerType=msi --no-daemon
           Copy-Item build/dist/*.msi "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-windows.msi"
 
