@@ -370,7 +370,7 @@ public class ResultEntryView extends JDialog {
             JButton button = UITheme.createSecondaryButton("Sieg " + winner.getShortName());
             button.setFocusable(false);
             button.setToolTipText("Nichtantritt: trägt 3 Sätze 11:0 für " + winner.getFullName()
-                    + " ein (zählt als 3:0 mit 33:0 Bällen). Danach speichern.");
+                    + " ein (zählt als 3:0 mit 33:0 Bällen, für die Buchholz als ungespielt). Danach speichern.");
             button.addActionListener(_ -> fillWalkover(setResultsFields, firstWins));
             walkoverRow.add(button);
         }

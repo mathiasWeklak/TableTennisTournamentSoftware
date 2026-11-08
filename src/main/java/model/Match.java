@@ -215,6 +215,31 @@ public class Match implements Serializable {
     }
 
     /**
+     * Returns {@code true} for a walkover ("kampflos"): the match is decided by exactly three sets
+     * 11:0 for the same player and nothing else was entered. This is what the "Kampflos" button
+     * enters; a real 3 x 11:0 is practically impossible. For the tie-breaks a walkover is an
+     * unplayed game (FIDE C.07).
+     *
+     * @return {@code true} for a walkover
+     */
+    public boolean isWalkover() {
+        if (!isDecided()) return false;
+        String[][] sets = getResults();
+        int first = 0;
+        int second = 0;
+        for (String[] row : sets) {
+            if (row == null || ResultRules.checkSet(row[0], row[1]) == ResultRules.SetStatus.EMPTY) continue;
+            String a = row[0] == null ? "" : row[0].trim();
+            String b = row[1] == null ? "" : row[1].trim();
+            if (a.equals("11") && b.equals("0")) first++;
+            else if (a.equals("0") && b.equals("11")) second++;
+            else return false;
+        }
+        return (first == ResultRules.SETS_TO_WIN && second == 0)
+                || (second == ResultRules.SETS_TO_WIN && first == 0);
+    }
+
+    /**
      * Returns the sets won by both players if the match is decided.
      *
      * @return {@code int[]{setsFirstPlayer, setsSecondPlayer}}, or {@code null} if not decided

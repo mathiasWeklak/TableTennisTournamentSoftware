@@ -231,8 +231,9 @@ public class ScoreCalculatorTest {
         ScoreCalculator calc = new ScoreCalculator(matches);
         calc.calculate(List.of(p1, p2));
 
-        // real opponent p2 (0 points) + virtual opponent with p1's own 2 points
-        assertEquals(p2.getPoints() + p1.getPoints(), p1.getBuchholz());
+        // real opponent p2 (0 points) + virtual opponent with p1's own 2 points,
+        // capped at half the number of rounds (2 rounds -> 1)
+        assertEquals(1, p1.getBuchholz());
     }
 
     @Test

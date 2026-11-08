@@ -79,4 +79,28 @@ public final class PrintUtil {
             JOptionPane.showMessageDialog(parent, "Fehler beim Drucken.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
         }
     }
+
+    /**
+     * Prints any printable in portrait after showing the print dialog.
+     *
+     * @param parent    parent component for error dialogs
+     * @param printable what to print
+     * @param jobName   the print job name
+     */
+    public static void print(Component parent, Printable printable, String jobName) {
+        try {
+            PrinterJob job = PrinterJob.getPrinterJob();
+            job.setJobName(jobName);
+            PageFormat pageFormat = job.defaultPage();
+            Paper paper = pageFormat.getPaper();
+            paper.setImageableArea(MARGIN, MARGIN, paper.getWidth() - MARGIN * 2, paper.getHeight() - MARGIN * 2);
+            pageFormat.setPaper(paper);
+            job.setPrintable(printable, job.validatePage(pageFormat));
+            if (job.printDialog()) {
+                job.print();
+            }
+        } catch (PrinterException e) {
+            JOptionPane.showMessageDialog(parent, "Fehler beim Drucken.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 }

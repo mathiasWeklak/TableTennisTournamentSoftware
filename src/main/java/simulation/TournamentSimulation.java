@@ -168,7 +168,7 @@ public class TournamentSimulation {
         for (int i = 0; i < sorted.size(); i++) {
             Player player = sorted.get(i);
             String tiebreakers = players.size() > 8
-                    ? ", BHZ: %d, fBHZ: %d".formatted(player.getBuchholz(), player.getFeinBuchholz())
+                    ? ", BHZ: %s, fBHZ: %s".formatted(controller.Standings.formatScore(player.getBuchholz()), controller.Standings.formatScore(player.getFeinBuchholz()))
                     : "";
             System.out.println("%d. %s (%d TTR) - Punkte: %d, Spiele: %d:%d, Saetze: %d:%d, Baelle: %d:%d%s".formatted(
                     i + 1, player.getFullName(), player.getTtr(),

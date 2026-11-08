@@ -73,14 +73,15 @@ public class ClassicByeAndFloatTest {
         assertEquals(2, a.getPoints());
         assertEquals(0, b.getPoints());
         assertEquals(1, c.getPoints());
-        // A: B (0) + virtual opponent with A's own points (2)
-        assertEquals(2, a.getBuchholz());
+        // A: B (0) + virtual opponent with A's own points (2), capped at half of 2 rounds (1)
+        assertEquals(1, a.getBuchholz());
         // B: A (2) + C (1)
         assertEquals(3, b.getBuchholz());
         assertEquals(0, c.getBuchholz());
-        // A: Buchholz of B (3) + virtual opponent with A's own Buchholz (2)
-        assertEquals(5, a.getFeinBuchholz());
-        assertEquals(2, b.getFeinBuchholz());
+        // A: Buchholz of B (3) + virtual opponent with A's own Buchholz (1)
+        assertEquals(4, a.getFeinBuchholz());
+        // B: Buchholz of A (1) + C (0)
+        assertEquals(1, b.getFeinBuchholz());
     }
 
     @Test

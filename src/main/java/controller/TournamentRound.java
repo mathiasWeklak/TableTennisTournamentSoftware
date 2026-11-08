@@ -6,6 +6,7 @@ import model.Player;
 import model.ResultRules;
 import model.TournamentMode;
 import model.TournamentState;
+import view.GroupTablesPanel;
 import view.TournamentRoundView;
 import view.UITheme;
 
@@ -218,10 +219,13 @@ public class TournamentRound {
         List<Standings.Entry> standings = currentStandings();
 
         boolean groups = mode == TournamentMode.GROUPS_KO;
-        DefaultTableModel tableModel = groups ? getGroupTableModel() : getDefaultTableModel(standings);
-        view.getResultsTable().setModel(tableModel);
-        UITheme.applyTableStyling(view.getResultsTable());
-        UITheme.setNameColumnWide(view.getResultsTable(), groups ? 2 : 1);
+        if (groups && view.getGroupTablesPanel() != null) {
+            view.getGroupTablesPanel().setTables(groupTables(false), groupLegend());
+        } else {
+            view.getResultsTable().setModel(getDefaultTableModel(standings));
+            UITheme.applyTableStyling(view.getResultsTable());
+            UITheme.setNameColumnWide(view.getResultsTable(), 1);
+        }
 
         String text = formatPairingsWithStatus(pairingEngine.getMatches(), mode, pairingEngine.knockoutRounds());
         if (groups && pairingEngine.isFinished()) text += finalPlacingText();
@@ -338,37 +342,39 @@ public class TournamentRound {
     }
 
     /**
-     * Builds the table of a group/knockout tournament: one block per group with the group rank;
-     * withdrawn participants are struck and listed at the end of their group.
+     * Builds the group tables of a group/knockout tournament.
+     *
+     * @param compact {@code true}: short names for printing
+     * @return one table per group, empty without groups
      */
-    private DefaultTableModel getGroupTableModel() {
-        DefaultTableModel tableModel = new DefaultTableModel() {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-        for (String c : new String[]{"Gruppe", "Rang", "Name", "Punkte", "Spiele", "Sätze", "Bälle"}) {
-            tableModel.addColumn(c);
-        }
+    List<GroupTables.Table> groupTables(boolean compact) {
         GroupKoState groupKo = pairingEngine.getGroupKo();
-        if (groupKo == null) return tableModel;
-        Set<Player> withdrawn = pairingEngine.getWithdrawn();
-        List<Match> counting = countingMatches();
-        for (int g = 0; g < groupKo.groups().size(); g++) {
-            List<Standings.Entry> entries = new ArrayList<>(
-                    Standings.compute(groupKo.groups().get(g), TournamentMode.ROUND_ROBIN, counting));
-            entries.sort(Comparator.comparing((Standings.Entry e) -> withdrawn.contains(e.player())));
-            for (Standings.Entry e : entries) {
-                Player p = e.player();
-                boolean out = withdrawn.contains(p);
-                tableModel.addRow(new Object[]{GroupKoState.groupName(g + 1), out ? "–" : e.rank(),
-                        p.getFullName() + " (" + p.getClub() + ")" + (out ? " – zurückgezogen" : ""),
-                        p.getPoints(), p.getWins() + ":" + p.getLosses(),
-                        p.getSetsWon() + ":" + p.getSetsLost(), p.getBallsWon() + ":" + p.getBallsLost()});
-            }
+        if (groupKo == null) return List.of();
+        return GroupTables.build(groupKo, countingMatches(), pairingEngine.getWithdrawn(), knockoutParticipants(), compact);
+    }
+
+    /**
+     * Returns the participants of the knockout stage: the drawn bracket, or, while the group
+     * stage is running, those who would qualify with the current standings.
+     */
+    private Set<Player> knockoutParticipants() {
+        GroupKoState groupKo = pairingEngine.getGroupKo();
+        Set<Player> result = new HashSet<>();
+        if (!groupKo.bracket().isEmpty()) {
+            groupKo.bracket().stream().filter(Objects::nonNull).forEach(result::add);
+        } else {
+            GroupKnockout.qualifiers(pairingEngine.rankedGroups(), groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced())
+                    .forEach(result::addAll);
         }
-        return tableModel;
+        return result;
+    }
+
+    private String groupLegend() {
+        GroupKoState groupKo = pairingEngine.getGroupKo();
+        if (groupKo == null) return "";
+        return groupKo.bracket().isEmpty()
+                ? "Grün: nach aktuellem Stand in der KO-Runde (vorläufig, solange die Vorrunde läuft)."
+                : "Grün: für die KO-Runde qualifiziert.";
     }
 
     /**
@@ -409,8 +415,8 @@ public class TournamentRound {
             List<Object> row = new ArrayList<>(List.of(rank, name, player.getPoints(),
                     player.getWins() + ":" + player.getLosses()));
             if (mode == TournamentMode.SWISS) {
-                row.add(player.getBuchholz());
-                row.add(player.getFeinBuchholz());
+                row.add(Standings.formatScore(player.getBuchholz()));
+                row.add(Standings.formatScore(player.getFeinBuchholz()));
             }
             row.add(player.getSetsWon() + ":" + player.getSetsLost());
             row.add(player.getBallsWon() + ":" + player.getBallsLost());
@@ -644,6 +650,12 @@ public class TournamentRound {
     }
 
     private void printPlacementTable() {
+        if (mode == TournamentMode.GROUPS_KO) {
+            String heading = "Gruppen: " + tournamentName + "  —  " + roundLabel()
+                    + (pairingEngine.isFinished() ? " (Endstand)" : "");
+            PrintUtil.print(view, GroupTablesPanel.printable(groupTables(true), heading), "Gruppen - " + tournamentName);
+            return;
+        }
         PrintUtil.printTable(view, view.getResultsTable(), "Rangliste - " + tournamentName,
                 "Turnier: " + tournamentName + "  —  " + roundLabel()
                         + (pairingEngine.isFinished() ? " (Endstand)" : ""));

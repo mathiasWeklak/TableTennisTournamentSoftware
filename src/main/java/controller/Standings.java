@@ -64,8 +64,8 @@ public final class Standings {
 
     private static Comparator<Player> swissComparator() {
         return Comparator.comparingInt(Player::getPoints).reversed()
-                .thenComparing(Comparator.comparingInt(Player::getBuchholz).reversed())
-                .thenComparing(Comparator.comparingInt(Player::getFeinBuchholz).reversed())
+                .thenComparing(Comparator.comparingDouble(Player::getBuchholz).reversed())
+                .thenComparing(Comparator.comparingDouble(Player::getFeinBuchholz).reversed())
                 .thenComparing(Comparator.comparingInt(Standings::setDiff).reversed())
                 .thenComparing(Comparator.comparingInt(Standings::ballDiff).reversed());
     }
@@ -178,5 +178,16 @@ public final class Standings {
             result.putAll(miniTable(group, matches));
         }
         return result;
+    }
+
+    /**
+     * Formats a tie-break score: whole numbers without decimals, halves with a comma ("12,5").
+     *
+     * @param value the score
+     * @return the formatted score
+     */
+    public static String formatScore(double value) {
+        if (value == Math.rint(value)) return Long.toString((long) value);
+        return String.format(java.util.Locale.GERMANY, "%.1f", value);
     }
 }

@@ -18,6 +18,7 @@ public class TournamentRoundView extends JFrame {
     private final String tournamentName;
     private final JTextArea pairingsTextArea;
     private final JTable resultsTable;
+    private final GroupTablesPanel groupTablesPanel;
     private final JLabel currentRoundLabel;
     private final JLabel statusLabel;
     private final JButton previewRefereeSheetsButton;
@@ -111,12 +112,16 @@ public class TournamentRoundView extends JFrame {
         // --- standings -------------------------------------------------------------------------
         resultsTable = new JTable();
         UITheme.applyTableStyling(resultsTable);
-        JScrollPane tableScrollPane = UITheme.neutralViewport(new JScrollPane(resultsTable));
+        // group/knockout: group tables instead of a ranking list
+        groupTablesPanel = mode == TournamentMode.GROUPS_KO ? new GroupTablesPanel() : null;
+        JScrollPane tableScrollPane = UITheme.neutralViewport(
+                new JScrollPane(groupTablesPanel != null ? groupTablesPanel : resultsTable));
+        tableScrollPane.getVerticalScrollBar().setUnitIncrement(16);
         tableScrollPane.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UITheme.BORDER_COLOR));
 
         JPanel tableInner = new JPanel(new BorderLayout());
         tableInner.setBackground(UITheme.SURFACE);
-        tableInner.setBorder(UITheme.cardBorder("Rangliste"));
+        tableInner.setBorder(UITheme.cardBorder(groupTablesPanel != null ? "Gruppen" : "Rangliste"));
         tableInner.add(tableScrollPane, BorderLayout.CENTER);
 
         JPanel tableCard = new JPanel(new BorderLayout());
@@ -213,6 +218,15 @@ public class TournamentRoundView extends JFrame {
      */
     public JTable getResultsTable() {
         return resultsTable;
+    }
+
+    /**
+     * Returns the group tables shown instead of the ranking in a group/knockout tournament.
+     *
+     * @return the group tables panel, or {@code null} in the other formats
+     */
+    public GroupTablesPanel getGroupTablesPanel() {
+        return groupTablesPanel;
     }
 
     /**

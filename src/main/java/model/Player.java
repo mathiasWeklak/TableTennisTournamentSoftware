@@ -26,8 +26,10 @@ public class Player implements Serializable {
     private final String partnerClub;
     private final int partnerTtr;
     private int points;
-    private int buchholz;
-    private int feinBuchholz;
+    // double: a virtual opponent may count with half a point (FIDE "Mr. 50%"); renamed from the
+    // former int fields so that files of older versions still load (values are recalculated)
+    private double buchholzScore;
+    private double feinBuchholzScore;
     private int wins;
     private int losses;
     private int setsWon;
@@ -81,8 +83,8 @@ public class Player implements Serializable {
         this.partnerClub = partnerClub;
         this.partnerTtr = partnerTtr;
         this.points = 0;
-        this.buchholz = 0;
-        this.feinBuchholz = 0;
+        this.buchholzScore = 0;
+        this.feinBuchholzScore = 0;
         this.wins = 0;
         this.losses = 0;
         this.setsWon = 0;
@@ -234,8 +236,8 @@ public class Player implements Serializable {
      *
      * @return the Buchholz score
      */
-    public int getBuchholz() {
-        return buchholz;
+    public double getBuchholz() {
+        return buchholzScore;
     }
 
     /**
@@ -243,8 +245,8 @@ public class Player implements Serializable {
      *
      * @param buchholz the Buchholz score to set
      */
-    public void setBuchholz(int buchholz) {
-        this.buchholz = buchholz;
+    public void setBuchholz(double buchholz) {
+        this.buchholzScore = buchholz;
     }
 
     /**
@@ -252,8 +254,8 @@ public class Player implements Serializable {
      *
      * @return the Fein-Buchholz score
      */
-    public int getFeinBuchholz() {
-        return feinBuchholz;
+    public double getFeinBuchholz() {
+        return feinBuchholzScore;
     }
 
     /**
@@ -261,8 +263,8 @@ public class Player implements Serializable {
      *
      * @param feinBuchholz the Fein-Buchholz score to set
      */
-    public void setFeinBuchholz(int feinBuchholz) {
-        this.feinBuchholz = feinBuchholz;
+    public void setFeinBuchholz(double feinBuchholz) {
+        this.feinBuchholzScore = feinBuchholz;
     }
 
     /**

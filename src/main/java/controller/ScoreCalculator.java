@@ -20,8 +20,11 @@ import java.util.*;
  * <p>Bye matches (where the second player is {@code null}) are scored as in the classic Swiss
  * System: the bye recipient gets one point, but the bye is not a played match, so it adds no win,
  * no sets and no balls. For Buchholz and Fein-Buchholz the bye counts as a game against a virtual
- * opponent who has as many points (and the same Buchholz) as the player himself (FIDE "dummy
- * opponent"). In a group/knockout tournament only group matches count for the statistics, byes
+ * opponent with the player's own points, but at most half the number of rounds ("Mr. 50%"), and
+ * the player's own Buchholz. A walkover ("kampflos", see {@link Match#isWalkover()}) is scored
+ * normally, but for the tie-breaks it is unplayed: both players count a virtual opponent with
+ * the lower score (and the lower Buchholz) of the two. This follows the direction of the FIDE
+ * tie-break revision 2026 (C.07, unplayed games). In a group/knockout tournament only group matches count for the statistics, byes
  * are worth nothing. In Round Robin mode all matches of a withdrawn player are annulled (see
  * {@link #setAnnulledPlayers}). The same applies to completed rounds in which a player was not paired at all
  * (late registration, withdrawal). In Round Robin mode a bye ("spielfrei") is worth nothing. Duplicate bye matches for the same player are deduplicated before processing to
@@ -153,16 +156,48 @@ public class ScoreCalculator {
 
         // Buchholz first for everyone, Fein-Buchholz needs the final Buchholz values
         Map<Player, Integer> unpaired = unpairedCompletedRounds(players, matchesToProcess);
-        players.forEach(p -> p.setBuchholz(calculateBuchholz(p, matchesToProcess)
-                + unpaired.getOrDefault(p, 0) * p.getPoints()));
+        int rounds = countedRounds(matchesToProcess);
+        players.forEach(p -> {
+            int playerRounds = rounds > 0 ? rounds : roundsOf(p, matchesToProcess, unpaired);
+            double dummy = dummyScore(p, playerRounds);
+            p.setBuchholz(calculateBuchholz(p, matchesToProcess, dummy)
+                    + unpaired.getOrDefault(p, 0) * dummy);
+        });
         players.forEach(p -> p.setFeinBuchholz(calculateFeinBuchholz(p, matchesToProcess)
                 + unpaired.getOrDefault(p, 0) * p.getBuchholz()));
     }
 
     /**
+     * Score of the virtual opponent for a bye or an unpaired round: the player's own points, but
+     * at most half the number of rounds ("Mr. 50%", direction of the FIDE tie-break revision 2026).
+     */
+    private static double dummyScore(Player player, int rounds) {
+        return Math.min(player.getPoints(), rounds / 2.0);
+    }
+
+    /**
+     * Number of rounds that count for the tie-breaks: the highest round with a bye or a decided
+     * match. 0 if the matches carry no round number (files of older versions).
+     */
+    private static int countedRounds(List<Match> matches) {
+        return matches.stream()
+                .filter(m -> m.getKoRound() == 0 && countsForBuchholz(m))
+                .mapToInt(Match::getRound)
+                .max().orElse(0);
+    }
+
+    /** Fallback without round numbers: the player's counted games plus unpaired rounds. */
+    private int roundsOf(Player player, List<Match> matches, Map<Player, Integer> unpaired) {
+        long games = matches.stream()
+                .filter(m -> m.getKoRound() == 0 && isPlayerInMatch(m, player) && countsForBuchholz(m))
+                .count();
+        return (int) games + unpaired.getOrDefault(player, 0);
+    }
+
+    /**
      * Counts for every player the completed rounds in which he was not paired at all (late
      * registration, withdrawal). Like a bye, each such round counts as a game against a virtual
-     * opponent with the player's own points (FIDE "dummy opponent"). A round is completed when all
+     * opponent like a bye (own points, at most half the number of rounds). A round is completed when all
      * its matches are decided. Only relevant for the Swiss System; matches without round number
      * (files of older versions) are ignored.
      *
@@ -218,18 +253,23 @@ public class ScoreCalculator {
     /**
      * Calculates the Buchholz score for the given player from the deduplicated match list.
      * The Buchholz score is the sum of points scored by all opponents the player has faced.
-     * Each bye counts as a virtual opponent with the player's own points.
+     * Each bye counts as a virtual opponent with {@code dummy} points, a walkover as one with the
+     * lower score of both players.
      *
      * @param player  the player whose Buchholz score is to be calculated
      * @param matches the deduplicated list of matches to evaluate
+     * @param dummy   the score of the virtual opponent for a bye
      * @return the Buchholz score
      */
-    private int calculateBuchholz(Player player, List<Match> matches) {
+    private double calculateBuchholz(Player player, List<Match> matches, double dummy) {
         return matches.stream()
                 .filter(match -> isPlayerInMatch(match, player) && countsForBuchholz(match))
-                .mapToInt(match -> match.getSecondPlayer() == null
-                        ? player.getPoints()
-                        : getOpponentPoints(match, player))
+                .mapToDouble(match -> {
+                    if (match.getSecondPlayer() == null) return dummy;
+                    int opponent = getOpponentPoints(match, player);
+                    // walkover: unplayed, virtual opponent with the lower score of both players
+                    return match.isWalkover() ? Math.min(player.getPoints(), opponent) : opponent;
+                })
                 .sum();
     }
 
@@ -237,18 +277,20 @@ public class ScoreCalculator {
      * Calculates the Fein-Buchholz score for the given player from the deduplicated match list.
      * The Fein-Buchholz score is the sum of Buchholz scores of all opponents the player has faced,
      * serving as a secondary tiebreaker after Buchholz. Each bye counts as a virtual opponent with
-     * the player's own Buchholz.
+     * the player's own Buchholz, a walkover as one with the lower Buchholz of both players.
      *
      * @param player  the player whose Fein-Buchholz score is to be calculated
      * @param matches the deduplicated list of matches to evaluate
      * @return the Fein-Buchholz score
      */
-    private int calculateFeinBuchholz(Player player, List<Match> matches) {
+    private double calculateFeinBuchholz(Player player, List<Match> matches) {
         return matches.stream()
                 .filter(match -> isPlayerInMatch(match, player) && countsForBuchholz(match))
-                .mapToInt(match -> match.getSecondPlayer() == null
-                        ? player.getBuchholz()
-                        : getOpponentBuchholz(match, player))
+                .mapToDouble(match -> {
+                    if (match.getSecondPlayer() == null) return player.getBuchholz();
+                    double opponent = getOpponentBuchholz(match, player);
+                    return match.isWalkover() ? Math.min(player.getBuchholz(), opponent) : opponent;
+                })
                 .sum();
     }
 
@@ -292,7 +334,7 @@ public class ScoreCalculator {
      * @param player the reference player
      * @return the opponent's Buchholz score
      */
-    private int getOpponentBuchholz(Match match, Player player) {
+    private double getOpponentBuchholz(Match match, Player player) {
         return match.getFirstPlayer().equals(player)
                 ? match.getSecondPlayer().getBuchholz()
                 : match.getFirstPlayer().getBuchholz();

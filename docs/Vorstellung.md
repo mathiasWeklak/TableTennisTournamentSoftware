@@ -31,7 +31,7 @@ Satz für Satz eintippen, Enter springt weiter. Die Software kennt die Tischtenn
 
 ## Pokal mit Gruppenphase und KO-Runde
 
-Gruppengröße, Anzahl der Weiterkommenden und „die besten Gruppendritten“ sind frei einstellbar, das Spiel um Platz 3 ebenso. Die Gruppen werden nach Setzliste verteilt, im Turnierbaum treffen Spieler derselben Gruppe so spät wie möglich aufeinander. Am Ende steht die komplette Platzierung fest.
+Gruppengröße, Anzahl der Weiterkommenden und „die besten Gruppendritten“ sind frei einstellbar, das Spiel um Platz 3 ebenso. Die Gruppen werden nach Setzliste verteilt und wie auf dem gewohnten Gruppenbogen angezeigt: jedes Ergebnis auf einen Blick, wer weiterkommt, ist grün markiert. Im Turnierbaum treffen Spieler derselben Gruppe so spät wie möglich aufeinander. Am Ende steht die komplette Platzierung fest.
 
 ![Gruppentabellen und Endplatzierung](screenshots/06_gruppen_ko_endstand.png)
 
@@ -49,11 +49,11 @@ Doppel werden einfach als Paar eingetragen. Gesetzt wird nach der Summe beider T
 
 ## Alles auf Papier, wenn es drauf ankommt
 
-Schiedsrichterzettel (sechs pro Seite, mit Turnier und Runde), Rangliste, Kreuztabelle und Turnierbaum lassen sich direkt drucken – für die Wand in der Halle oder die Mappe der Turnierleitung.
+Schiedsrichterzettel (sechs pro Seite, mit Turnier und Runde), Rangliste, Gruppentabellen, Kreuztabelle und Turnierbaum lassen sich direkt drucken – für die Wand in der Halle oder die Mappe der Turnierleitung.
 
-| Schiedsrichterzettel | Turnierbaum |
-|---|---|
-| ![Schiedsrichterzettel](screenshots/05_schiedsrichterzettel_druck.png) | ![Turnierbaum im Druck](screenshots/08_turnierbaum_druck.png) |
+| Schiedsrichterzettel | Gruppentabellen | Turnierbaum |
+|---|---|---|
+| ![Schiedsrichterzettel](screenshots/05_schiedsrichterzettel_druck.png) | ![Gruppentabellen im Druck](screenshots/10_gruppen_druck.png) | ![Turnierbaum im Druck](screenshots/08_turnierbaum_druck.png) |
 
 ![Kreuztabelle](screenshots/04_kreuztabelle.png)
 
@@ -63,7 +63,7 @@ Schiedsrichterzettel (sechs pro Seite, mit Turnier und Runde), Rangliste, Kreuzt
 
 - **Nichts geht verloren:** Jede Eingabe wird sofort gespeichert, ein abgebrochenes Turnier lässt sich jederzeit weiterführen.
 - **Korrekturen möglich:** Ergebnisse früherer Runden nachträglich ändern, eine Auslosung zurücknehmen, Spieler zurückziehen oder nachmelden.
-- **Regelgerecht:** Freilos und Buchholz nach FIDE-Vorbild, direkter Vergleich bei Punktgleichheit nach ITTF.
+- **Regelgerecht:** Freilos, kampflose Spiele und Buchholz nach FIDE-Vorbild (Stand 2026), direkter Vergleich bei Punktgleichheit nach ITTF.
 - **Für jeden Rechner:** Installationspakete für Windows, macOS und Linux mit eingebauter Java-Laufzeit – einfach herunterladen und starten.
 
 ---

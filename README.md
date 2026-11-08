@@ -23,7 +23,7 @@ Sie unterstützt das **Schweizer System**, den Modus **„Jeder gegen Jeden“**
 - 🚪 **Spieler zurückziehen** (beide Modi) und **Spieler nachmelden** (Schweizer System)
 - 🪑 **Automatische Tischzuweisung** für jede Begegnung
 - 🧮 **Ergebniseingabe**: satzweise mit Prüfung der Tischtennisregeln, Statusanzeige pro Spiel, Tastaturbedienung (Enter, Strg+S, Esc), „Kampflos“-Schaltflächen, Korrektur früherer Runden
-- 🖨️ **Drucken**: Rangliste, Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde)
+- 🖨️ **Drucken**: Rangliste bzw. Gruppentabellen, Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde)
 - 🛠️ **Manuelle Anpassung der Setzung** (nur im Schweizer System)
 - ⚠️ **Fehlerdialog** bei unerwarteten Fehlern, Details in `Turniersoftware-Fehler.log`
 
@@ -47,7 +47,8 @@ Bei ungerader Spielerzahl erhält der niedrigstplatzierte Spieler ohne bisherige
 
 - **Einstellungen:** Gruppengröße (feste Höchstgröße; geht es nicht auf, haben einige Gruppen einen Teilnehmer weniger), Anzahl Weiterkommende je Gruppe, zusätzlich die x besten Nächstplatzierten (z. B. die besten Gruppendritten), Spiel um Platz 3 ja/nein
 - **Gruppeneinteilung:** nach Setzliste im Schlangensystem (A1, B1, C1, C2, B2, A2, …)
-- **Vorrunde:** Jeder gegen Jeden in jeder Gruppe, alle Gruppen spielen parallel; Gruppentabelle mit direktem Vergleich nach ITTF
+- **Vorrunde:** Jeder gegen Jeden in jeder Gruppe, alle Gruppen spielen parallel; Platzierung mit direktem Vergleich nach ITTF
+- **Gruppentabellen:** statt einer Rangliste eine Tabelle je Gruppe wie auf dem Papierbogen: Nr., Name, Ergebnis gegen jeden Gruppengegner, Spiele, Sätze, Bälle, Punkte, Platz; Weiterkommende sind grün markiert (während der Vorrunde vorläufig); „Tabelle drucken“ druckt die Gruppentabellen
 - **Beste Nächstplatzierte:** Vergleich über die Gruppen nach Punkten pro Spiel, dann Satz- und Balldifferenz pro Spiel, dann TTR
 - **Turnierbaum:** Gruppensieger vor Gruppenzweiten vor den übrigen Weiterkommenden, jeweils nach TTR; Freilose für die Bestgesetzten; Teilnehmer derselben Gruppe treffen möglichst spät aufeinander
 - **KO-Runde:** Best of 5; mit Spiel um Platz 3 Endplatzierung 1–4, ohne teilen sich beide Halbfinal-Verlierer Platz 3; danach geteilte Plätze 5, 9, …; zieht sich ein Teilnehmer zurück, kommt sein Gegner kampflos weiter
@@ -61,7 +62,10 @@ Gewertet werden nur entschiedene Spiele: Ein Spieler hat 3 Sätze gewonnen, alle
 **Schweizer System:** Punkte, Buchholz, Fein-Buchholz, Satzdifferenz, Balldifferenz.
 
 - Freilos: 1 Punkt, aber kein Sieg und keine Sätze oder Bälle
-- Für Buchholz und Fein-Buchholz zählen Freilos und Runden ohne Paarung (Nachmeldung, Rückzug) als Spiel gegen einen virtuellen Gegner mit den eigenen Punkten
+- Ungespielte Runden in Buchholz und Fein-Buchholz nach der Richtung der FIDE-Überarbeitung 2026 (C.07):
+  - Freilos und Runden ohne Paarung (Nachmeldung, Rückzug): virtueller Gegner mit den eigenen Punkten, höchstens aber der halben Rundenzahl („Mr. 50 %“; während des Turniers die halbe Zahl der bisherigen Runden), dazu für die Fein-Buchholz die eigene Buchholz
+  - Kampflos (3 Sätze 11:0, wie von der Schaltfläche eingetragen): zählt für Punkte, Sätze und Bälle normal, für die Buchholz aber als ungespielt; beide Spieler werten einen virtuellen Gegner mit der niedrigeren Punktzahl (bzw. Buchholz) der beiden
+  - Buchholzwerte können dadurch halbe Punkte enthalten (z. B. 12,5)
 
 **Jeder gegen Jeden:** Punkte; bei Punktgleichheit der direkte Vergleich nach ITTF (Siege, dann Sätze, dann Bälle nur aus den Spielen der Punktgleichen untereinander; bleibt eine Teilgruppe gleich, wird für sie neu verglichen), danach Satz- und Balldifferenz aller Spiele. Spielfrei gibt 0 Punkte. Zieht sich ein Spieler zurück, werden alle seine Spiele gestrichen (auch bereits gespielte); er steht ohne Rang am Ende der Tabelle. Im Schweizer System bleiben die Ergebnisse eines zurückgezogenen Spielers bestehen.
 

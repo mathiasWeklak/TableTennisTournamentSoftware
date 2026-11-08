@@ -142,7 +142,7 @@ public class CrossTableController {
                     ? (i + 1) + ". " + rowPlayer.getShortName()
                     : (i + 1) + ". " + rowPlayer.getFullName() + " (" + rowPlayer.getClub() + ")";
             for (int j = 0; j < n; j++) {
-                row[j + 1] = i == j ? "-" : findResult(rowPlayer, players.get(j));
+                row[j + 1] = i == j ? "-" : resultFor(allMatches, rowPlayer, players.get(j));
             }
             model.addRow(row);
         }
@@ -154,11 +154,12 @@ public class CrossTableController {
      * Finds the result of a group or league match between rowPlayer and colPlayer from rowPlayer's
      * perspective. Knockout matches are not part of the cross table.
      *
-     * @param rowPlayer the player whose perspective is used
-     * @param colPlayer the opponent
+     * @param allMatches all matches
+     * @param rowPlayer  the player whose perspective is used
+     * @param colPlayer  the opponent
      * @return the result string, or an empty string if the match was not played yet
      */
-    private String findResult(Player rowPlayer, Player colPlayer) {
+    static String resultFor(List<Match> allMatches, Player rowPlayer, Player colPlayer) {
         for (Match match : allMatches) {
             String result = match.getOverallResult();
             if (result == null || result.isEmpty() || result.equals(":") || match.getSecondPlayer() == null
