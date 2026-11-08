@@ -246,6 +246,39 @@ public class GroupKnockoutTest {
     }
 
     @Test
+    public void withoutThirdPlaceMatch_bothSemiLosersShareThirdPlace() {
+        Random rnd = new Random(9);
+        List<Player> ps = players(8);
+        PairingEngine engine = new PairingEngine(ps, 4, TournamentMode.GROUPS_KO);
+        engine.setGroupKo(new GroupKoState(4, 2, 0, false).withGroupsAndBracket(GroupKnockout.assignGroups(ps, 4), new ArrayList<>()));
+        ScoreCalculator calc = new ScoreCalculator(engine.getAllMatches(), TournamentMode.GROUPS_KO);
+        int round = 0;
+        while (engine.generateNextRound(round + 1) != null) {
+            round++;
+            enterRandom(engine.getMatches(), rnd);
+            calc.calculate(ps);
+        }
+        assertEquals(3 + 2, round, "3 Gruppenrunden, Halbfinale, Finale");
+        List<Match> ko = engine.getAllMatches().stream().filter(m -> m.getKoRound() > 0).toList();
+        assertNull(GroupKnockout.find(ko, 2, 0, true), "kein Spiel um Platz 3");
+        assertEquals(1, engine.getMatchesOfRound(round).size(), "im Finale nur ein Spiel");
+        List<Integer> places = GroupKnockout.finalPlacing(ko, 2).stream().map(Map.Entry::getValue).toList();
+        assertEquals(List.of(1, 2, 3, 3), places);
+        assertFalse(engine.getGroupKo().thirdPlaceMatch(), "Einstellung bleibt beim Kopieren erhalten");
+    }
+
+    @Test
+    public void thirdPlaceMatchIsDefault() {
+        assertTrue(new GroupKoState(4, 2, 0).thirdPlaceMatch());
+        assertTrue(new GroupKoState(4, 2, 0, new ArrayList<>(), new ArrayList<>()).thirdPlaceMatch());
+        assertFalse(new GroupKoState(4, 2, 0, false).thirdPlaceMatch());
+        assertTrue(BracketController.buildModel(new GroupKoState(4, 2, 1), List.of()).placeholder()
+                .contains("der beste Gruppen-Dritte."));
+        assertTrue(BracketController.buildModel(new GroupKoState(4, 2, 2, false), List.of()).placeholder()
+                .contains("die 2 besten Gruppen-Dritten. Ohne Spiel um Platz 3"));
+    }
+
+    @Test
     public void undoFirstKnockoutRoundClearsBracket() {
         Random rnd = new Random(3);
         List<Player> ps = players(8);

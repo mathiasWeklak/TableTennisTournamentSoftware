@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-A Java-based desktop application for managing table tennis tournaments. Supports both the **Swiss System** and **Round-Robin** ("Jeder gegen Jeden") modes with a Swing-based GUI.
+A Java-based desktop application for managing table tennis tournaments. Supports the **Swiss System**, **Round-Robin** ("Jeder gegen Jeden") and **group stage + knockout stage**, each for singles or **doubles**, with a Swing-based GUI. Native packages for Windows, Linux and macOS are built with jpackage.
 
 - **Author**: Mathias Weklak
 - **Language**: Java 25
@@ -22,7 +22,9 @@ src/
 │   ├── controller/
 │   │   ├── TournamentController.java       # App entry point, player setup, file loading
 │   │   ├── TournamentRound.java            # Running tournament: rounds, undo, withdrawal, late entry, saving
-│   │   ├── PairingEngine.java              # Swiss System (optimal matching) and Round Robin (circle method)
+│   │   ├── PairingEngine.java              # Swiss System (optimal matching), Round Robin (circle method), groups/KO
+│   │   ├── GroupKnockout.java              # Groups (snake system), group schedule, qualification, bracket, placing
+│   │   ├── BracketController.java          # Knockout bracket display model
 │   │   ├── WeightedMatching.java           # Maximum weight matching (Edmonds' blossom algorithm)
 │   │   ├── ScoreCalculator.java            # Points, sets, balls, Buchholz, Fein-Buchholz
 │   │   ├── Standings.java                  # Ranking incl. ITTF direct comparison and shared ranks
@@ -35,13 +37,17 @@ src/
 │   │   ├── PrintUtil.java                  # Table printing, MessageFormat escaping
 │   │   └── ErrorHandler.java               # Error dialog and log file for uncaught exceptions
 │   ├── model/
-│   │   ├── Player.java                     # Player data model with stats
-│   │   ├── Match.java                      # Match with set results, round and float information
+│   │   ├── Player.java                     # Participant: single player or doubles pair, with stats
+│   │   ├── Match.java                      # Match with set results, round, float and group/knockout information
+│   │   ├── GroupKoState.java               # Group/knockout settings, groups and bracket
 │   │   ├── ResultRules.java                # Table tennis set/match rules
 │   │   └── TournamentState.java            # Serializable snapshot of tournament state
 │   ├── simulation/
 │   │   └── TournamentSimulation.java       # GUI-free simulation; drives PairingEngine directly
-│   └── view/                               # Swing views, UITheme, WrapLayout
+│   └── view/                               # Swing views (incl. BracketView), UITheme, WrapLayout
+├── main/resources/icons/                   # Window icon
+packaging/                                  # IconGenerator and icons for the native packages
+.github/workflows/release.yml               # Builds packages for all systems on version tags
 └── test/java/                              # JUnit 5 tests (see below)
 ```
 
@@ -54,6 +60,15 @@ A match counts if its set results form a complete best-of-five match (valid sets
 
 ### Swiss System pairing
 Each round is paired as a whole by a minimum-cost perfect matching without rematches. Cost levels: score differences, float history of the previous round, float history two rounds ago, who floats, upper half against lower half within a score group. The bye goes to the lowest-ranked player without a previous bye. The seeding order (TTR, ties by lot) is the last tie-break everywhere.
+
+### Group stage + knockout stage
+- Fixed maximum group size; snake distribution by seeding; round robin in every group
+- Qualifiers: first n of every group plus the x best on place n+1 (per-match comparison)
+- Bracket: group winners before runners-up before further qualifiers (TTR within each level), byes for the best seeds, same-group participants as far apart as possible
+- Knockout best of five; match for third place optional (`GroupKoState.noThirdPlaceMatch`, stored negated so older files keep the match)
+
+### Doubles
+- A pair is one `Player` with partner fields; seeding by the sum of both TTR values; a person may only play in one pair
 
 ### Bye (Freilos)
 - Swiss: 1 point, no win, no sets or balls; counts as a virtual opponent with the player's own points for Buchholz/Fein-Buchholz (also rounds without pairing after late entry or withdrawal)
@@ -114,6 +129,7 @@ Each round is paired as a whole by a minimum-cost perfect matching without remat
 | `SwissClassicPairingTest`, `ClassicByeAndFloatTest` | Upper vs. lower half, floaters, float history, bye scoring |
 | `controller.WeightedMatchingTest` | Matching compared with brute force on random graphs |
 | `controller.StandingsAndRoundFeaturesTest`, `controller.ReviewFixesTest` | Ranking, direct comparison, withdrawal, undo, seeding, helpers |
+| `controller.GroupKnockoutTest`, `controller.DoublesAndGroupUiTest` | Groups, bracket, whole group/KO tournaments, third place option, doubles, saving |
 | `controller.TournamentStorageTest`, `controller.ControllerHelpersTest` | Saving/loading, file names, escaping, duplicate names |
 | `TournamentStateTest`, `TournamentStateRoundtripTest` | State record and serialization |
 | `view.ResultEntryViewTest` | Walkover entry |

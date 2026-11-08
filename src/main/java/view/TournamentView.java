@@ -25,6 +25,7 @@ public class TournamentView extends JFrame {
     private final JTextField groupSizeField;
     private final JTextField qualifiersField;
     private final JTextField bestNextField;
+    private final JCheckBox thirdPlaceBox;
     private final JButton addPlayerButton;
     private final JButton editPlayerButton;
     private final JButton removePlayerButton;
@@ -119,6 +120,12 @@ public class TournamentView extends JFrame {
         groupRow.add(qualifiersField);
         groupRow.add(makeLabel("  + beste Nächstplatzierte:"));
         groupRow.add(bestNextField);
+        thirdPlaceBox = new JCheckBox("Spiel um Platz 3", true);
+        thirdPlaceBox.setOpaque(false);
+        thirdPlaceBox.setFont(UITheme.FONT_BODY);
+        thirdPlaceBox.setToolTipText("Ohne Spiel um Platz 3 teilen sich beide Halbfinal-Verlierer den dritten Platz.");
+        groupRow.add(Box.createHorizontalStrut(10));
+        groupRow.add(thirdPlaceBox);
         gbc.gridwidth = 5;
         formCard.add(groupRow, gbc);
         gbc.gridwidth = 1;
@@ -250,6 +257,7 @@ public class TournamentView extends JFrame {
         groupSizeField.setEnabled(groups);
         qualifiersField.setEnabled(groups);
         bestNextField.setEnabled(groups);
+        thirdPlaceBox.setEnabled(groups);
     }
 
     /**
@@ -307,6 +315,15 @@ public class TournamentView extends JFrame {
      */
     public JTextField getBestNextField() {
         return bestNextField;
+    }
+
+    /**
+     * Returns the check box "Spiel um Platz 3".
+     *
+     * @return the check box
+     */
+    public JCheckBox getThirdPlaceBox() {
+        return thirdPlaceBox;
     }
 
     /**

@@ -27,16 +27,16 @@ jobs:
         include:
           - os: windows-2022
             label: windows
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             label: linux
           - os: macos-latest
             label: macos-arm64
           - os: macos-15-intel
             label: macos-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6.1.0
         with:
           distribution: temurin
           java-version: "25"
@@ -92,7 +92,7 @@ jobs:
           ./gradlew jpackage -PinstallerType=dmg --no-daemon
           cp build/dist/*.dmg "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-${{ matrix.label }}.dmg"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: packages-${{ matrix.label }}
           path: out/*
@@ -102,14 +102,14 @@ jobs:
     name: GitHub release
     needs: package
     if: startsWith(github.ref, 'refs/tags/v') && !cancelled()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           path: packages
           merge-multiple: true
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3.0.3
         with:
           name: TT-Turniersoftware ${{ github.ref_name }}
           files: packages/*

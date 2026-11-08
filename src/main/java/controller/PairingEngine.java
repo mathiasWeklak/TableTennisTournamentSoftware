@@ -705,8 +705,7 @@ public class PairingEngine {
     public void setGroupKo(GroupKoState state) {
         List<List<Player>> groups = new ArrayList<>();
         for (List<Player> g : state.groups()) groups.add(new ArrayList<>(g));
-        this.groupKo = new GroupKoState(state.groupSize(), state.qualifiersPerGroup(), state.bestNextPlaced(),
-                groups, new ArrayList<>(state.bracket()));
+        this.groupKo = state.withGroupsAndBracket(groups, new ArrayList<>(state.bracket()));
     }
 
     /**
@@ -718,8 +717,7 @@ public class PairingEngine {
         if (groupKo == null) return null;
         List<List<Player>> groups = new ArrayList<>();
         for (List<Player> g : groupKo.groups()) groups.add(new ArrayList<>(g));
-        return new GroupKoState(groupKo.groupSize(), groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced(),
-                groups, new ArrayList<>(groupKo.bracket()));
+        return groupKo.withGroupsAndBracket(groups, new ArrayList<>(groupKo.bracket()));
     }
 
     /**
@@ -811,7 +809,7 @@ public class PairingEngine {
                 m.setKnockout(koRound, slot, false);
                 created.add(m);
             }
-            if (koRound == total && total >= 2) {
+            if (koRound == total && total >= 2 && groupKo.thirdPlaceMatch()) {
                 // match for third place between the losers of the semi-finals
                 List<Player> losers = new ArrayList<>();
                 for (int slot = 0; slot < 2; slot++) {

@@ -87,14 +87,28 @@ public class BracketController {
      * @param allMatches all matches
      * @return the model
      */
+    /** "Zweite", "Dritte", ... for a group place (used after "Gruppen-"). */
+    static String placedName(int place) {
+        return switch (place) {
+            case 2 -> "Zweite";
+            case 3 -> "Dritte";
+            case 4 -> "Vierte";
+            case 5 -> "Fünfte";
+            default -> place + ".";
+        };
+    }
+
     static Model buildModel(GroupKoState groupKo, List<Match> allMatches) {
         if (groupKo == null || groupKo.bracket().isEmpty()) {
             String text = "Der Turnierbaum wird nach der Vorrunde ausgelost.";
             if (groupKo != null) {
                 text += " Weiter kommen die ersten " + groupKo.qualifiersPerGroup() + " jeder Gruppe"
                         + (groupKo.bestNextPlaced() > 0
-                        ? " und die " + groupKo.bestNextPlaced() + " besten Gruppen-" + (groupKo.qualifiersPerGroup() + 1) + "."
-                        : "") + ".";
+                        ? " und " + (groupKo.bestNextPlaced() == 1 ? "der beste " : "die " + groupKo.bestNextPlaced() + " besten ")
+                        + "Gruppen-" + placedName(groupKo.qualifiersPerGroup() + 1) + (groupKo.bestNextPlaced() == 1 ? "" : "n")
+                        : "") + "."
+                        + (groupKo.thirdPlaceMatch() ? " Es gibt ein Spiel um Platz 3."
+                        : " Ohne Spiel um Platz 3: beide Halbfinal-Verlierer werden Dritte.");
             }
             return new Model(List.of(), List.of(), null, text);
         }

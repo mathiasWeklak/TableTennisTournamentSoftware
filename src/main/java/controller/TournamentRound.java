@@ -99,7 +99,7 @@ public class TournamentRound {
         if (mode == TournamentMode.GROUPS_KO && groupKo != null) {
             // new tournament: snake distribution in seeding order; loaded tournament: saved groups
             pairingEngine.setGroupKo(skipInitialPairing ? groupKo
-                    : new GroupKoState(groupKo.groupSize(), groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced(),
+                    : groupKo.withGroupsAndBracket(
                     GroupKnockout.assignGroups(this.playerList, groupKo.groupSize()), new ArrayList<>()));
         }
 

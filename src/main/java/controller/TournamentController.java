@@ -247,7 +247,7 @@ public class TournamentController {
                 JOptionPane.showMessageDialog(view, error, "Gruppen-Einstellungen", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            groupKo = new GroupKoState(groupSize, perGroup, bestNext);
+            groupKo = new GroupKoState(groupSize, perGroup, bestNext, view.getThirdPlaceBox().isSelected());
         }
         new TournamentRound(playerList, tournamentName, tableCount, mode, plannedRounds, doubles(), groupKo).setVisible(true);
         view.dispose();
