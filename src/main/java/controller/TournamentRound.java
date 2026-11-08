@@ -646,6 +646,7 @@ public class TournamentRound {
         Player player = (Player) box.getSelectedItem();
         if (choice != JOptionPane.OK_OPTION || player == null) return;
         pairingEngine.withdraw(player);
+        closeRefereeSheets(); // the sheets may contain matches that are struck now
         updateResultsTable();
         saveTournamentState();
         boolean openMatch = mode != TournamentMode.ROUND_ROBIN && pairingEngine.getMatches().stream()
