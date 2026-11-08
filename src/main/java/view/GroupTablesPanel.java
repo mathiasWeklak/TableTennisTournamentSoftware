@@ -40,6 +40,8 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
     private static final Color DIAGONAL = new Color(120, 126, 134);
     private static final Color WITHDRAWN = new Color(150, 150, 150);
     private static final int RESULT_WIDTH = 42;
+    /** Rows of a placing box; a longer list continues in the next box (and page). */
+    static final int PLACING_ROWS_PER_BOX = 24;
 
     private final JLabel legend = new JLabel();
     private final JPanel boxes = new JPanel(new WrapLayout(FlowLayout.LEFT, 12, 10));
@@ -176,8 +178,26 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
      * @return the printable
      */
     public static Printable printable(List<GroupTables.Table> tables, List<Object[]> placing, String title) {
+        return printable(tables, placing, "Endplatzierung", title);
+    }
+
+    /**
+     * Returns a printable with the placing (split into boxes of {@value #PLACING_ROWS_PER_BOX} rows,
+     * so a long list continues on the next page) followed by the group tables.
+     *
+     * @param tables       the group tables, may be empty
+     * @param placing      rows {place, name, club}
+     * @param placingTitle title of the placing box, e.g. "Endplatzierung"
+     * @param title        the heading on every page
+     * @return the printable
+     */
+    public static Printable printable(List<GroupTables.Table> tables, List<Object[]> placing, String placingTitle,
+                                      String title) {
         List<JComponent> parts = new ArrayList<>();
-        if (!placing.isEmpty()) parts.add(layoutForPrint(createPlacingBox(placing)));
+        for (int from = 0; from < placing.size(); from += PLACING_ROWS_PER_BOX) {
+            List<Object[]> chunk = placing.subList(from, Math.min(placing.size(), from + PLACING_ROWS_PER_BOX));
+            parts.add(layoutForPrint(createPlacingBox(chunk, from == 0 ? placingTitle : placingTitle + " (Fortsetzung)")));
+        }
         for (GroupTables.Table t : tables) {
             parts.add(layoutForPrint(createBox(t)));
         }
@@ -242,6 +262,17 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
      * @return the box
      */
     static JPanel createPlacingBox(List<Object[]> rows) {
+        return createPlacingBox(rows, "Endplatzierung");
+    }
+
+    /**
+     * Creates a box with a placing list (place, name, club).
+     *
+     * @param rows  rows {place, name, club}
+     * @param title the box title
+     * @return the box
+     */
+    static JPanel createPlacingBox(List<Object[]> rows, String title) {
         DefaultTableModel model = new DefaultTableModel(new String[]{"Platz", "Name", "Verein"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -268,7 +299,7 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
         table.getTableHeader().setPreferredSize(new Dimension(width, 28));
         JPanel box = new JPanel(new BorderLayout());
         box.setBackground(UITheme.SURFACE);
-        box.setBorder(UITheme.cardBorder("Endplatzierung"));
+        box.setBorder(UITheme.cardBorder(title));
         box.add(table.getTableHeader(), BorderLayout.NORTH);
         box.add(table, BorderLayout.CENTER);
         return box;

@@ -31,6 +31,8 @@ public class TournamentView extends JFrame {
     private final JButton removePlayerButton;
     private final JButton beginTournamentButton;
     private final JMenuItem loadMenuItem;
+    private final JMenuItem importMenuItem;
+    private final JMenuItem exportMenuItem;
 
     /**
      * Constructs and lays out the tournament setup window.
@@ -181,6 +183,13 @@ public class TournamentView extends JFrame {
         JMenuItem loadTournamentItem = new JMenuItem("Turnier laden");
         loadTournamentItem.setFont(UITheme.FONT_BODY);
         fileMenu.add(loadTournamentItem);
+        fileMenu.addSeparator();
+        importMenuItem = new JMenuItem("Teilnehmer importieren (CSV) …");
+        importMenuItem.setFont(UITheme.FONT_BODY);
+        fileMenu.add(importMenuItem);
+        exportMenuItem = new JMenuItem("Teilnehmer exportieren (CSV) …");
+        exportMenuItem.setFont(UITheme.FONT_BODY);
+        fileMenu.add(exportMenuItem);
         menuBar.add(fileMenu);
         setJMenuBar(menuBar);
         this.loadMenuItem = loadTournamentItem;
@@ -369,5 +378,36 @@ public class TournamentView extends JFrame {
      */
     public JMenuItem getLoadMenuItem() {
         return loadMenuItem;
+    }
+
+    /**
+     * Returns the "import participants" menu item.
+     *
+     * @return the menu item
+     */
+    public JMenuItem getImportMenuItem() {
+        return importMenuItem;
+    }
+
+    /**
+     * Returns the "export participants" menu item.
+     *
+     * @return the menu item
+     */
+    public JMenuItem getExportMenuItem() {
+        return exportMenuItem;
+    }
+
+    /**
+     * Selects a tournament format.
+     *
+     * @param mode the format
+     */
+    public void setSelectedMode(TournamentMode mode) {
+        modeBox.setSelectedItem(switch (mode) {
+            case SWISS -> MODE_SWISS;
+            case ROUND_ROBIN -> MODE_ROUND_ROBIN;
+            case GROUPS_KO -> MODE_GROUPS_KO;
+        });
     }
 }

@@ -151,6 +151,15 @@ public class Match implements Serializable {
     }
 
     /**
+     * Returns the table for display: the number, or "–" while the match waits for a free table.
+     *
+     * @return the table label
+     */
+    public String getTableLabel() {
+        return tableNumber > 0 ? String.valueOf(tableNumber) : "–";
+    }
+
+    /**
      * Retrieves the set results of the match.
      *
      * @return the set results as a 2D array of strings

@@ -66,6 +66,10 @@ public class ResultEntryController {
     public void saveResults(boolean showConfirmation) {
         List<String> problems = new ArrayList<>();
         List<String> blocked = new ArrayList<>();
+        // group/knockout: did the qualifiers match the drawn bracket before this change?
+        boolean bracketMatchedQualifiers = tournamentRound.bracketMatchesQualifiers();
+        List<Match> waiting = tournamentRound.getMatches().stream()
+                .filter(m -> m.getSecondPlayer() != null && m.getTableNumber() <= 0).toList();
         for (MatchPanelData data : view.getMatchPanelData()) {
             String[][] sets = readSets(data.setResultsFields());
             if (changesDrawnWinner(data.match(), sets, tournamentRound.getCurrentRound())) {
@@ -78,7 +82,7 @@ public class ResultEntryController {
             data.match().setOverallResult(ResultRules.overallResult(sets));
 
             ResultRules.validateSets(sets).forEach(problem -> problems.add(
-                    "Tisch " + data.match().getTableNumber() + " ("
+                    "Tisch " + data.match().getTableLabel() + " ("
                             + data.match().getFirstPlayer().getFullName() + " – "
                             + data.match().getSecondPlayer().getFullName() + "): " + problem));
         }
@@ -86,6 +90,22 @@ public class ResultEntryController {
         tournamentRound.updateResultsTable();
         tournamentRound.saveTournamentState();
 
+        List<String> called = waiting.stream().filter(m -> m.getTableNumber() > 0)
+                .map(m -> "Tisch " + m.getTableNumber() + ": " + m.getFirstPlayer().getFullName()
+                        + " – " + m.getSecondPlayer().getFullName())
+                .toList();
+        if (!called.isEmpty()) {
+            JOptionPane.showMessageDialog(view, "Jetzt aufrufen:\n\n" + String.join("\n", called),
+                    "Tisch frei", JOptionPane.INFORMATION_MESSAGE);
+        }
+        if (bracketMatchedQualifiers && !tournamentRound.bracketMatchesQualifiers()) {
+            JOptionPane.showMessageDialog(view,
+                    "Durch die Korrektur hätten sich andere Teilnehmer für die KO-Runde qualifiziert.\n"
+                            + "Die bereits ausgeloste KO-Runde bleibt unverändert.\n\n"
+                            + "Um neu auszulosen, die Auslosung der ersten KO-Runde zurücknehmen\n"
+                            + "(möglich, solange dort noch kein Ergebnis eingetragen ist).",
+                    "Weiterkommende geändert", JOptionPane.WARNING_MESSAGE);
+        }
         if (!blocked.isEmpty()) {
             JOptionPane.showMessageDialog(view,
                     "Diese Ergebnisse wurden nicht geändert, weil der Sieger schon in der nächsten KO-Runde steht:\n\n"
@@ -244,8 +264,21 @@ public class ResultEntryController {
      * @return the tab title, e.g. "T1: Müller – Meier"
      */
     public static String tabTitle(Match match) {
-        return "T" + match.getTableNumber() + ": " + match.getFirstPlayer().getShortName()
-                + " – " + match.getSecondPlayer().getShortName();
+        return tabTitle(match, java.util.Map.of());
+    }
+
+    /**
+     * Builds the tab title of a match with short names that are unique within the round
+     * (see {@link Player#uniqueShortNames}).
+     *
+     * @param match      a non-bye match
+     * @param shortNames unique short names; players missing in the map use their last name
+     * @return the tab title, e.g. "T1: A. Müller – Meier"; "T–" for a match waiting for a table
+     */
+    public static String tabTitle(Match match, java.util.Map<Player, String> shortNames) {
+        return "T" + match.getTableLabel() + ": "
+                + shortNames.getOrDefault(match.getFirstPlayer(), match.getFirstPlayer().getShortName())
+                + " – " + shortNames.getOrDefault(match.getSecondPlayer(), match.getSecondPlayer().getShortName());
     }
 
     private static String[][] readSets(JTextField[][] fields) {

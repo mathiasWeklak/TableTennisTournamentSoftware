@@ -197,6 +197,16 @@ public class PairingEngine {
     }
 
     /**
+     * Returns {@code true} if any result (also a partial one) is entered in the current round.
+     *
+     * @return {@code true} with results
+     */
+    public boolean hasResultsInCurrentRound() {
+        return matches.stream().anyMatch(m -> m.getSecondPlayer() != null
+                && (!ResultRules.overallResult(m.getResults()).isEmpty() || m.isDecided()));
+    }
+
+    /**
      * Returns {@code true} if the current round's draw can be taken back: it is not the first
      * round, no result has been entered in it yet, and the previous round is known.
      *
@@ -305,8 +315,51 @@ public class PairingEngine {
         if (text != null) {
             pairedRound = currentRound;
             stampPairingInfo();
+            queueSurplusMatches();
         }
         return text;
+    }
+
+    /**
+     * With more matches than tables, every table is given once; the other matches wait (table 0)
+     * and are called by {@link #assignFreeTables()} when a table becomes free.
+     */
+    private void queueSurplusMatches() {
+        Set<Integer> given = new HashSet<>();
+        for (Match m : matches) {
+            if (m.getSecondPlayer() != null && !given.add(m.getTableNumber())) m.setTable(0);
+        }
+    }
+
+    /**
+     * Calls waiting matches of the current round to free tables: a table is free if no undecided
+     * match of the current round is played on it. Matches are called in the order of the pairing.
+     * Struck matches (withdrawal in Round Robin or group stage) do not block a table.
+     *
+     * @return the matches that got a table now
+     */
+    public List<Match> assignFreeTables() {
+        Set<Player> struck = mode == TournamentMode.SWISS ? Set.of() : annulledPlayers();
+        Set<Integer> used = new HashSet<>();
+        List<Match> waiting = new ArrayList<>();
+        for (Match m : matches) {
+            if (m.getSecondPlayer() == null || m.isDecided()) continue;
+            boolean isStruck = m.getKoRound() == 0
+                    && (struck.contains(m.getFirstPlayer()) || struck.contains(m.getSecondPlayer()));
+            if (isStruck) continue;
+            if (m.getTableNumber() > 0) used.add(m.getTableNumber());
+            else waiting.add(m);
+        }
+        List<Match> called = new ArrayList<>();
+        int table = 1;
+        for (Match m : waiting) {
+            while (table <= tableNumber && used.contains(table)) table++;
+            if (table > tableNumber) break;
+            m.setTable(table);
+            used.add(table);
+            called.add(m);
+        }
+        return called;
     }
 
     /**
@@ -1060,6 +1113,7 @@ public class PairingEngine {
         }
         matches.addAll(byeMatches);
         allMatches.addAll(byeMatches);
+        queueSurplusMatches();
         byeList = new HashSet<>(getPlayersWithBye(allMatches));
         for (Match m : matches) {
             Player a = m.getFirstPlayer();
@@ -1176,7 +1230,7 @@ public class PairingEngine {
                         : match.getFirstPlayer().getFullName() + " (" + match.getFirstPlayer().getClub() + ")"
                                 + " vs. "
                                 + match.getSecondPlayer().getFullName() + " (" + match.getSecondPlayer().getClub() + ")"
-                                + " - Tisch " + match.getTableNumber() + "\n")
+                                + " - Tisch " + match.getTableLabel() + "\n")
                 .collect(Collectors.joining());
     }
 }

@@ -13,17 +13,18 @@ Sie unterstützt das **Schweizer System**, den Modus **„Jeder gegen Jeden“**
 
 ## ✨ Funktionen
 
-- 💾 **Automatisches Speichern** gleich nach der ersten Auslosung, nach jeder Ergebniseingabe, Setzungsänderung und Runde sowie beim Schließen
+- 💾 **Automatisches Speichern** gleich nach der ersten Auslosung, nach jeder Ergebniseingabe, Setzungsänderung und Runde sowie beim Schließen; Speicherort und Uhrzeit stehen unten im Turnierfenster, eine Kopie (z. B. auf USB-Stick) gibt es über „Drucken / Export“
 - 🔁 **Fortsetzen unterbrochener Turniere** durch Laden gespeicherter `.ser`-Dateien
 - 🏆 **Vorrunde in Gruppen + KO-Runde** mit Turnierbaum (Anzeige und Druck); Spiel um Platz 3 wahlweise
 - 👫 **Doppelkonkurrenzen**: Teilnehmer sind Paare; Setzung nach der Summe beider TTR-Werte, jede Person nur in einem Doppel
 - 👥 **Spielerverwaltung**: Hinzufügen, Bearbeiten (auch per Doppelklick), Entfernen mit Rückfrage; gleiche Vor- und Nachnamen werden abgelehnt
+- 📥 **Teilnehmer importieren und exportieren (CSV)** über das Menü „Datei“, z. B. aus click-TT oder Excel: Trennzeichen `;`, `,` oder Tab; Spalten per Kopfzeile („Vorname“, „Nachname“ bzw. „Name“, „Verein“, „TTR“ bzw. „Q-TTR“, bei Doppeln je zweimal) oder in dieser Reihenfolge; UTF-8 oder Excel-Kodierung; ungültige Zeilen werden mit Zeilennummer gemeldet
 - 🎲 **Setzliste**: nach TTR; bei gleichem oder fehlendem TTR entscheidet das Los
-- 📋 **Turnierablauf**: Auslosung mit Rückfrage, „Auslosung zurücknehmen“ solange noch kein Ergebnis erfasst ist, optionale Rundenzahl im Schweizer System
+- 📋 **Turnierablauf**: Auslosung mit Rückfrage, „Auslosung zurücknehmen“ solange noch kein Ergebnis erfasst ist, in Runde 1 „Zurück zur Einrichtung“ (z. B. für Nachzügler; Teilnehmer und Einstellungen bleiben erhalten), optionale Rundenzahl im Schweizer System
 - 🚪 **Spieler zurückziehen** (alle Turnierformen) und **Spieler nachmelden** (Schweizer System, nicht mehr in der letzten geplanten Runde)
-- 🪑 **Automatische Tischzuweisung** für jede Begegnung
+- 🪑 **Tischaufruf**: Jeder Tisch wird einmal vergeben; gibt es mehr Spiele als Tische, warten die übrigen und werden aufgerufen, sobald ein Tisch frei wird (Hinweis nach dem Speichern eines Ergebnisses)
 - 🧮 **Ergebniseingabe**: satzweise mit Prüfung der Tischtennisregeln, Statusanzeige pro Spiel, Tastaturbedienung (Enter, nach entschiedenem Spiel direkt zum nächsten Spiel; Strg+S, Esc), „Kampflos“-Schaltflächen, Korrektur früherer Runden (ein KO-Ergebnis kann den Sieger nicht mehr ändern, sobald die nächste KO-Runde ausgelost ist)
-- 🖨️ **Drucken**: Rangliste bzw. Gruppentabellen (nach Turnierende mit Endplatzierung), Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde bzw. Gruppe oder KO-Runde; lange Namen und Doppel zweizeilig)
+- 🖨️ **Drucken / Export**: Rangliste bzw. Gruppentabellen (nach Turnierende mit Endplatzierung), Ergebnisliste mit allen Satzergebnissen, Siegerliste, Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde bzw. Gruppe oder KO-Runde; lange Namen und Doppel zweizeilig); Rangliste bzw. Gruppentabellen und Ergebnisliste auch als CSV (z. B. für Excel oder die Vereinshomepage); als PDF über einen PDF-Drucker wie „Microsoft Print to PDF“
 - 🛠️ **Manuelle Anpassung der Setzung** (nur im Schweizer System)
 - ⚠️ **Fehlerdialog** bei unerwarteten Fehlern, Details in `Turniersoftware-Fehler.log`
 
@@ -48,7 +49,7 @@ Bei ungerader Spielerzahl erhält der niedrigstplatzierte Spieler ohne bisherige
 - **Einstellungen:** Gruppengröße (feste Höchstgröße; geht es nicht auf, haben einige Gruppen einen Teilnehmer weniger), Anzahl Weiterkommende je Gruppe, zusätzlich die x besten Nächstplatzierten (z. B. die besten Gruppendritten), Spiel um Platz 3 ja/nein
 - **Gruppeneinteilung:** nach Setzliste im Schlangensystem (A1, B1, C1, C2, B2, A2, …)
 - **Vorrunde:** Jeder gegen Jeden in jeder Gruppe, alle Gruppen spielen parallel; Platzierung mit direktem Vergleich nach ITTF
-- **Gruppentabellen:** statt einer Rangliste eine Tabelle je Gruppe wie auf dem Papierbogen: Nr., Name, Ergebnis gegen jeden Gruppengegner, Spiele, Sätze, Bälle, Punkte, Platz; Weiterkommende sind grün markiert (während der Vorrunde vorläufig); „Tabelle drucken“ druckt die Gruppentabellen
+- **Gruppentabellen:** statt einer Rangliste eine Tabelle je Gruppe wie auf dem Papierbogen: Nr., Name, Ergebnis gegen jeden Gruppengegner, Spiele, Sätze, Bälle, Punkte, Platz; Weiterkommende sind grün markiert (während der Vorrunde vorläufig); „Drucken / Export“ druckt die Gruppentabellen. Ändert eine Korrektur der Vorrunde nach der KO-Auslosung die Weiterkommenden, weist das Programm darauf hin (die Auslosung bleibt, bis sie zurückgenommen wird)
 - **Beste Nächstplatzierte:** Vergleich über die Gruppen nach Punkten pro Spiel, dann Satz- und Balldifferenz pro Spiel, dann TTR
 - **Turnierbaum:** Gruppensieger vor Gruppenzweiten vor den übrigen Weiterkommenden, jeweils nach TTR; Freilose immer für die Bestgesetzten; Teilnehmer derselben Gruppe treffen möglichst spät aufeinander
 - **KO-Runde:** Best of 5; mit Spiel um Platz 3 Endplatzierung 1–4, ohne teilen sich beide Halbfinal-Verlierer Platz 3; danach geteilte Plätze 5, 9, …

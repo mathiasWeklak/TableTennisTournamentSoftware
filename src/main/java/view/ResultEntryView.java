@@ -153,13 +153,20 @@ public class ResultEntryView extends JDialog {
         hintLabel.setText(earlierRound
                 ? "<html><div style='width:520px'>Korrektur einer früheren Runde: ändert die Tabelle, nicht die bereits ausgelosten Runden.</div></html>"
                 : " ");
+        List<Player> inRound = new ArrayList<>();
+        for (Match match : matches) {
+            if (match.getSecondPlayer() == null) continue;
+            inRound.add(match.getFirstPlayer());
+            inRound.add(match.getSecondPlayer());
+        }
+        java.util.Map<Player, String> shortNames = Player.uniqueShortNames(inRound);
         for (Match match : matches) {
             if (match.getSecondPlayer() == null) continue;
             String fullNames = match.getFirstPlayer().getFullName() + " vs. " + match.getSecondPlayer().getFullName();
-            String title = ResultEntryController.tabTitle(match);
+            String title = ResultEntryController.tabTitle(match, shortNames);
             if (indexOfBaseTitle(title) >= 0) {
-                // same table and same last names: fall back to the (unique) full names
-                title = "T" + match.getTableNumber() + ": " + fullNames;
+                // same table and same names: fall back to the full names
+                title = "T" + match.getTableLabel() + ": " + fullNames;
             }
             JPanel panel = createMatchPanel(match);
             panel.putClientProperty("baseTitle", title);

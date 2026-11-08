@@ -88,7 +88,7 @@ public class RefereeSheetsView extends JDialog {
             matchPanel.add(tableCard, BorderLayout.CENTER);
             tabbedPane.addTab(sheetLabel, matchPanel);
             tabbedPane.setToolTipTextAt(tabbedPane.getTabCount() - 1,
-                    "Tisch " + match.getTableNumber() + ": " + match.getFirstPlayer().getFullName()
+                    "Tisch " + match.getTableLabel() + ": " + match.getFirstPlayer().getFullName()
                             + " – " + match.getSecondPlayer().getFullName());
         });
 

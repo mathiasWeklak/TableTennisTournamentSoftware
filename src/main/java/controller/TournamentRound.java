@@ -203,13 +203,16 @@ public class TournamentRound {
             new ResultEntryController(view, this);
             updateResultsTable();
         });
-        view.getPrintTableButton().addActionListener(_ -> printPlacementTable());
+        view.getPrintTableButton().addActionListener(_ -> showPrintMenu());
         view.getCrossTableButton().addActionListener(_ -> showCrossTable());
         if (view.getBracketButton() != null) {
             view.getBracketButton().addActionListener(_ -> showBracket());
         }
         view.getNextRoundButton().addActionListener(_ -> startNextRound());
-        view.getUndoRoundButton().addActionListener(_ -> undoLastRound());
+        view.getUndoRoundButton().addActionListener(_ -> {
+            if (currentRound == 1) backToSetup();
+            else undoLastRound();
+        });
         view.getWithdrawPlayerButton().addActionListener(_ -> withdrawPlayer());
         if (view.getAddPlayerButton() != null) {
             view.getAddPlayerButton().addActionListener(_ -> addLatePlayer());
@@ -239,6 +242,7 @@ public class TournamentRound {
     public void updateResultsTable() {
         scoreCalculator.setAnnulledPlayers(pairingEngine.annulledPlayers());
         scoreCalculator.calculate(playerList);
+        pairingEngine.assignFreeTables(); // waiting matches get the tables that became free
         List<Standings.Entry> standings = currentStandings();
 
         boolean groups = mode == TournamentMode.GROUPS_KO;
@@ -289,7 +293,15 @@ public class TournamentRound {
         view.getNextRoundButton().setText(total > 0 && currentRound >= total ? "Turnier abschließen"
                 : mode == TournamentMode.GROUPS_KO && currentRound == pairingEngine.groupRounds() ? "KO-Runde auslosen"
                 : "Nächste Runde auslosen");
-        view.getUndoRoundButton().setEnabled(pairingEngine.canUndoLastRound());
+        // round 1 without results: back to the setup (participants and settings stay), e.g. for latecomers
+        boolean firstRound = currentRound == 1;
+        view.getUndoRoundButton().setText(firstRound ? "Zurück zur Einrichtung" : "Auslosung zurücknehmen");
+        view.getUndoRoundButton().setToolTipText(firstRound
+                ? "Verwirft die Auslosung von Runde 1; Teilnehmer und Einstellungen bleiben erhalten (z. B. für Nachzügler)."
+                : "Nimmt die Auslosung der aktuellen Runde zurück, solange noch kein Ergebnis erfasst ist.");
+        view.getUndoRoundButton().setEnabled(firstRound
+                ? !finished && !pairingEngine.hasResultsInCurrentRound()
+                : pairingEngine.canUndoLastRound());
         view.getWithdrawPlayerButton().setEnabled(!finished);
         // a late registration is paired from the next round on: not in the last planned round
         if (view.getAddPlayerButton() != null) {
@@ -357,7 +369,7 @@ public class TournamentRound {
             Player b = m.getSecondPlayer();
             int[] sets = m.decidedSets();
             String status = isStruck(m, struck) ? "gestrichen (zurückgezogen)" : sets != null ? sets[0] + ":" + sets[1] : "offen";
-            sb.append(String.format("Tisch %2d: ", m.getTableNumber()))
+            sb.append(m.getTableNumber() > 0 ? String.format("Tisch %2d: ", m.getTableNumber()) : "Wartet:   ")
                     .append(stage)
                     .append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
                     .append(b.getFullName()).append(" (").append(b.getClub()).append(")   ")
@@ -372,6 +384,23 @@ public class TournamentRound {
     private static boolean isStruck(Match m, Set<Player> struck) {
         return m.getKoRound() == 0 && m.getSecondPlayer() != null
                 && (struck.contains(m.getFirstPlayer()) || struck.contains(m.getSecondPlayer()));
+    }
+
+    /**
+     * Group/knockout tournament with a drawn bracket: returns {@code true} if the participants of
+     * the bracket are exactly those who qualify with the current group standings.
+     *
+     * @return {@code false} without bracket, in other formats or if they differ
+     */
+    boolean bracketMatchesQualifiers() {
+        GroupKoState groupKo = pairingEngine.getGroupKo();
+        if (mode != TournamentMode.GROUPS_KO || groupKo == null || groupKo.bracket().isEmpty()) return false;
+        Set<Player> qualified = new HashSet<>();
+        GroupKnockout.qualifiers(pairingEngine.rankedGroups(), groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced())
+                .forEach(qualified::addAll);
+        Set<Player> inBracket = new HashSet<>();
+        groupKo.bracket().stream().filter(p -> p != null && !pairingEngine.getWithdrawn().contains(p)).forEach(inBracket::add);
+        return qualified.equals(inBracket);
     }
 
     /** Players whose group or league matches are struck (none in the Swiss System). */
@@ -693,7 +722,7 @@ public class TournamentRound {
     static List<String> unfinishedMatchDescriptions(List<Match> matches) {
         return matches.stream()
                 .filter(m -> m.getSecondPlayer() != null && !m.isDecided())
-                .map(m -> (m.getRound() > 0 ? "Runde " + m.getRound() + ", " : "") + "Tisch " + m.getTableNumber() + ": "
+                .map(m -> (m.getRound() > 0 ? "Runde " + m.getRound() + ", " : "") + "Tisch " + m.getTableLabel() + ": "
                         + m.getFirstPlayer().getFullName() + " – " + m.getSecondPlayer().getFullName())
                 .toList();
     }
@@ -746,6 +775,209 @@ public class TournamentRound {
             bracketView.toFront();
         } else {
             bracketView = new BracketController(view, tournamentName, pairingEngine.getGroupKo(), pairingEngine.getAllMatches());
+        }
+    }
+
+    /**
+     * Discards the draw of round 1 and opens the setup screen with the same participants and
+     * settings, e.g. to add latecomers. Only possible as long as no result is entered.
+     */
+    private void backToSetup() {
+        if (currentRound != 1 || pairingEngine.hasResultsInCurrentRound()) return;
+        if (!confirm("Zurück zur Einrichtung?\nDie Auslosung von Runde 1 wird verworfen; Teilnehmer und Einstellungen "
+                + "bleiben erhalten.\nDanach Teilnehmer ergänzen und das Turnier neu beginnen.", "Zurück zur Einrichtung")) {
+            return;
+        }
+        GroupKoState groupKo = pairingEngine.getGroupKo();
+        GroupKoState settings = groupKo == null ? null : new GroupKoState(groupKo.groupSize(),
+                groupKo.qualifiersPerGroup(), groupKo.bestNextPlaced(), groupKo.thirdPlaceMatch());
+        List<Player> participants = new ArrayList<>(pairingEngine.activePlayers());
+        closeRefereeSheets();
+        view.dispose();
+        TournamentController.openSetup(new TournamentController.Setup(tournamentName, tableNumber, mode, plannedRounds,
+                doubles, settings, participants));
+    }
+
+    /** Opens the menu of the "Drucken / Export" button. */
+    private void showPrintMenu() {
+        JPopupMenu menu = new JPopupMenu();
+        boolean groups = mode == TournamentMode.GROUPS_KO;
+        menu.add(menuItem(groups ? "Gruppentabellen drucken" : "Rangliste drucken", this::printPlacementTable));
+        menu.add(menuItem("Ergebnisliste drucken", this::printResultList));
+        JMenuItem winners = menuItem(pairingEngine.isFinished() ? "Siegerliste drucken" : "Zwischenstand als Siegerliste drucken",
+                this::printWinnerList);
+        winners.setEnabled(!groups || pairingEngine.isFinished());
+        if (groups && !pairingEngine.isFinished()) winners.setToolTipText("Bei Gruppen + KO erst nach dem Finale");
+        menu.add(winners);
+        menu.addSeparator();
+        menu.add(menuItem(groups ? "Gruppentabellen als CSV speichern …" : "Rangliste als CSV speichern …", this::exportStandings));
+        menu.add(menuItem("Ergebnisliste als CSV speichern …", this::exportResults));
+        menu.addSeparator();
+        menu.add(menuItem("Kopie des Turnierstands speichern (z. B. USB-Stick) …", this::saveCopy));
+        JButton button = view.getPrintTableButton();
+        menu.show(button, 0, -menu.getPreferredSize().height);
+    }
+
+    private static JMenuItem menuItem(String text, Runnable action) {
+        JMenuItem item = new JMenuItem(text);
+        item.setFont(UITheme.FONT_BODY);
+        item.addActionListener(_ -> action.run());
+        return item;
+    }
+
+    /**
+     * Rows of the result list: every decided match (struck matches excluded), by round.
+     *
+     * @return rows {round, table, first, second, result, sets}
+     */
+    List<String[]> resultListRows() {
+        Set<Player> struck = struckPlayers();
+        List<String[]> rows = new ArrayList<>();
+        List<Match> matches = new ArrayList<>(pairingEngine.getAllMatches());
+        matches.sort(Comparator.comparingInt(Match::getRound).thenComparing(Match::isThirdPlace)
+                .thenComparingInt(Match::getTableNumber));
+        for (Match m : matches) {
+            if (m.getSecondPlayer() == null || isStruck(m, struck)) continue;
+            int[] sets = m.decidedSets();
+            if (sets == null) continue;
+            String stage = m.isThirdPlace() ? "Spiel um Platz 3"
+                    : m.getRound() > 0 ? roundName(m.getRound()) + (m.getGroupNo() > 0 ? ", Gruppe " + GroupKoState.groupName(m.getGroupNo()) : "")
+                    : "–";
+            StringBuilder setText = new StringBuilder();
+            if (m.isWalkover()) {
+                setText.append("kampflos");
+            } else {
+                for (String[] set : m.getResults()) {
+                    if (set == null || ResultRules.checkSet(set[0], set[1]) != ResultRules.SetStatus.VALID) continue;
+                    if (!setText.isEmpty()) setText.append(", ");
+                    setText.append(set[0].trim()).append(':').append(set[1].trim());
+                }
+            }
+            rows.add(new String[]{stage, m.getTableLabel(), m.getFirstPlayer().getFullName(), m.getSecondPlayer().getFullName(),
+                    sets[0] + ":" + sets[1], setText.toString()});
+        }
+        return rows;
+    }
+
+    /**
+     * Rows of the winner list: place, name, club. Swiss/Round Robin from the standings (struck
+     * players without place, withdrawn players marked); group/knockout: the final placing,
+     * followed by the participants eliminated in the group stage (without place).
+     *
+     * @return rows {place, name, club}
+     */
+    List<Object[]> winnerListRows() {
+        List<Object[]> rows = new ArrayList<>();
+        Set<Player> withdrawn = pairingEngine.getWithdrawn();
+        if (mode == TournamentMode.GROUPS_KO) {
+            Set<Player> placed = new HashSet<>();
+            for (Map.Entry<Player, Integer> e : finalPlacing()) {
+                placed.add(e.getKey());
+                rows.add(new Object[]{e.getValue() + ".", e.getKey().getFullName()
+                        + (withdrawn.contains(e.getKey()) ? " (zurückgezogen)" : ""), e.getKey().getClub()});
+            }
+            List<GroupTables.Table> tables = groupTables(false);
+            List<List<Player>> groups = pairingEngine.getGroupKo().groups();
+            for (int g = 0; g < tables.size(); g++) {
+                GroupTables.Table t = tables.get(g); // tables are in group order
+                List<Player> group = groups.get(g);
+                for (int i = 0; i < group.size(); i++) {
+                    Player p = group.get(i);
+                    if (placed.contains(p)) continue;
+                    Object place = t.rows().get(i)[t.columns().length - 1];
+                    rows.add(new Object[]{"–", p.getFullName() + " (Vorrunde: " + t.title() + ", "
+                            + (withdrawn.contains(p) ? "zurückgezogen" : place) + ")", p.getClub()});
+                }
+            }
+            return rows;
+        }
+        Set<Player> struck = struckPlayers();
+        for (Standings.Entry e : currentStandings()) {
+            Player p = e.player();
+            boolean out = struck.contains(p);
+            rows.add(new Object[]{out ? "–" : e.rank() + ".", p.getFullName()
+                    + (withdrawn.contains(p) ? " (zurückgezogen)" : ""), p.getClub()});
+        }
+        return rows;
+    }
+
+    private String printHeading(String what) {
+        return what + ": " + tournamentName + "  —  " + roundLabel() + (pairingEngine.isFinished() ? " (Endstand)" : "");
+    }
+
+    private void printResultList() {
+        DefaultTableModel model = new DefaultTableModel(new String[]{"Runde", "Tisch", "Spieler", "Gegner", "Ergebnis", "Sätze"}, 0);
+        resultListRows().forEach(model::addRow);
+        if (model.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(view, "Es sind noch keine Ergebnisse erfasst.");
+            return;
+        }
+        JTable table = new JTable(model);
+        UITheme.applyTableStyling(table);
+        UITheme.setNameColumnWide(table, 2);
+        PrintUtil.printTable(view, table, "Ergebnisliste - " + tournamentName, printHeading("Ergebnisliste"));
+    }
+
+    private void printWinnerList() {
+        String title = pairingEngine.isFinished() ? "Siegerliste" : "Zwischenstand";
+        PrintUtil.print(view, GroupTablesPanel.printable(List.of(), winnerListRows(),
+                pairingEngine.isFinished() ? "Endstand" : "Zwischenstand", printHeading(title)), title + " - " + tournamentName);
+    }
+
+    private void exportStandings() {
+        List<String[]> rows = new ArrayList<>();
+        if (mode == TournamentMode.GROUPS_KO) {
+            rows.add(new String[]{"Gruppe", "Nr.", "Name", "Spiele", "Sätze", "Bälle", "Punkte", "Platz"});
+            for (GroupTables.Table t : groupTables(false)) {
+                int n = t.size();
+                for (Object[] r : t.rows()) {
+                    rows.add(new String[]{t.title(), String.valueOf(r[0]), String.valueOf(r[1]), String.valueOf(r[n + 2]),
+                            String.valueOf(r[n + 3]), String.valueOf(r[n + 4]), String.valueOf(r[n + 5]), String.valueOf(r[n + 6])});
+                }
+            }
+        } else {
+            DefaultTableModel model = getDefaultTableModel(currentStandings());
+            String[] header = new String[model.getColumnCount()];
+            for (int c = 0; c < header.length; c++) header[c] = model.getColumnName(c);
+            rows.add(header);
+            for (int r = 0; r < model.getRowCount(); r++) {
+                String[] row = new String[header.length];
+                for (int c = 0; c < header.length; c++) row[c] = String.valueOf(model.getValueAt(r, c));
+                rows.add(row);
+            }
+        }
+        File target = CsvFiles.chooseTarget(view, mode == TournamentMode.GROUPS_KO ? "Gruppentabellen speichern" : "Rangliste speichern",
+                TournamentStorage.sanitizeFileName(tournamentName) + (mode == TournamentMode.GROUPS_KO ? "_Gruppen" : "_Rangliste"));
+        if (target != null) CsvFiles.write(view, target, ParticipantCsv.toCsv(rows));
+    }
+
+    private void exportResults() {
+        List<String[]> rows = new ArrayList<>();
+        rows.add(new String[]{"Runde", "Tisch", "Spieler", "Gegner", "Ergebnis", "Sätze"});
+        rows.addAll(resultListRows());
+        File target = CsvFiles.chooseTarget(view, "Ergebnisliste speichern",
+                TournamentStorage.sanitizeFileName(tournamentName) + "_Ergebnisse");
+        if (target != null) CsvFiles.write(view, target, ParticipantCsv.toCsv(rows));
+    }
+
+    /** Saves a copy of the tournament state at a place of the user's choice (e.g. a USB stick). */
+    private void saveCopy() {
+        JFileChooser chooser = new JFileChooser(TournamentStorage.defaultSaveDirectory());
+        chooser.setDialogTitle("Kopie des Turnierstands speichern");
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Turnier-Dateien (*.ser)", "ser"));
+        chooser.setSelectedFile(new File(TournamentStorage.sanitizeFileName(tournamentName) + "_Kopie.ser"));
+        if (chooser.showSaveDialog(view) != JFileChooser.APPROVE_OPTION) return;
+        File file = chooser.getSelectedFile();
+        if (!file.getName().toLowerCase().endsWith(".ser")) file = new File(file.getParentFile(), file.getName() + ".ser");
+        File current = TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), tournamentName);
+        if (TournamentStorage.isSameFile(file, current)) {
+            JOptionPane.showMessageDialog(view, "Das ist die Datei, in die ohnehin automatisch gespeichert wird.");
+            return;
+        }
+        if (file.exists() && !confirm(file.getName() + " gibt es schon. Ersetzen?", "Kopie speichern")) return;
+        if (writeState(file)) {
+            JOptionPane.showMessageDialog(view, "Kopie gespeichert:\n" + file.getAbsolutePath()
+                    + "\n\nWeiter automatisch gespeichert wird in:\n" + current.getAbsolutePath());
         }
     }
 
@@ -819,7 +1051,11 @@ public class TournamentRound {
      * Shows an error dialog with the target path if the file cannot be written.
      */
     void saveTournamentState() {
-        writeState(TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), tournamentName));
+        File file = TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), tournamentName);
+        if (writeState(file)) {
+            view.showSaveInfo("Automatisch gespeichert " + java.time.LocalTime.now().format(
+                    java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + " in " + file.getAbsolutePath());
+        }
     }
 
     /**
@@ -830,13 +1066,15 @@ public class TournamentRound {
         writeState(TournamentStorage.saveFile(TournamentStorage.defaultSaveDirectory(), tournamentName, currentRound));
     }
 
-    private void writeState(File file) {
+    private boolean writeState(File file) {
         try {
             TournamentStorage.save(toState(), file);
+            return true;
         } catch (IOException e) {
             JOptionPane.showMessageDialog(view,
                     "Fehler beim Speichern nach:\n" + file.getAbsolutePath() + "\n\n" + e.getMessage(),
                     "Fehler", JOptionPane.ERROR_MESSAGE);
+            return false;
         }
     }
 

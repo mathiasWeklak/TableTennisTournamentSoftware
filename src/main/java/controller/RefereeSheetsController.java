@@ -149,7 +149,7 @@ public class RefereeSheetsController {
      * @return the label for tabs and sheet titles
      */
     public String getSheetLabel(Match match) {
-        return "T" + match.getTableNumber() + ": "
+        return "T" + match.getTableLabel() + ": "
                 + lastNameOf(match.getFirstPlayer()) + " – " + lastNameOf(match.getSecondPlayer());
     }
 
@@ -313,7 +313,7 @@ public class RefereeSheetsController {
         g2.setFont(titleFont);
         FontMetrics titleFm = g2.getFontMetrics();
         int titleBaseline = top + (titleBarHeight + titleFm.getAscent() - titleFm.getDescent()) / 2;
-        String tableLabel = "Tisch " + match.getTableNumber();
+        String tableLabel = "Tisch " + match.getTableLabel();
         g2.drawString(tableLabel, left + 8, titleBaseline);
         int tableLabelEnd = left + 8 + titleFm.stringWidth(tableLabel);
 

@@ -52,12 +52,15 @@ public class PairingEngineRegressionTest {
 
     private static void assertValidRound(List<Player> all, List<Match> round, int tables) {
         Set<Player> seen = new HashSet<>();
+        Set<Integer> usedTables = new HashSet<>();
         int normal = 0;
         for (Match m : round) {
             assertTrue(seen.add(m.getFirstPlayer()), "Spieler doppelt in Runde");
             if (m.getSecondPlayer() != null) {
                 assertTrue(seen.add(m.getSecondPlayer()), "Spieler doppelt in Runde");
-                assertTrue(m.getTableNumber() >= 1 && m.getTableNumber() <= tables, "Tisch außerhalb 1.." + tables);
+                // 0 = waits for a free table (more matches than tables)
+                assertTrue(m.getTableNumber() >= 0 && m.getTableNumber() <= tables, "Tisch außerhalb 0.." + tables);
+                if (m.getTableNumber() > 0) assertTrue(usedTables.add(m.getTableNumber()), "Tisch doppelt belegt");
                 normal++;
             } else {
                 assertEquals(-1, m.getTableNumber(), "Freilos darf keinen Tisch belegen");

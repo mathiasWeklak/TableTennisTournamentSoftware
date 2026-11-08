@@ -23,6 +23,50 @@ import java.util.List;
 public class TournamentController {
     private final TournamentView view;
     private final List<Player> playerList;
+    /** Name of the tournament that came back from round 1: its file may be replaced without asking. */
+    private String replaceableTournament;
+
+    /**
+     * Settings and participants of a tournament, to continue editing them in the setup screen
+     * (back from round 1).
+     *
+     * @param name          tournament name
+     * @param tables        number of tables
+     * @param mode          tournament format
+     * @param plannedRounds planned rounds (Swiss), 0 = open
+     * @param doubles       doubles competition
+     * @param groupKo       group settings, {@code null} for other formats
+     * @param players       the participants
+     */
+    public record Setup(String name, int tables, TournamentMode mode, int plannedRounds, boolean doubles,
+                        GroupKoState groupKo, List<Player> players) {
+    }
+
+    /**
+     * Opens the setup screen filled with the given settings and participants. The tournament file
+     * of that name is replaced without the "already saved" question.
+     *
+     * @param setup the settings
+     */
+    public static void openSetup(Setup setup) {
+        TournamentView view = new TournamentView();
+        TournamentController controller = new TournamentController(view);
+        view.getTournamentNameField().setText(setup.name());
+        view.getTableCountField().setText(String.valueOf(setup.tables()));
+        view.setSelectedMode(setup.mode());
+        view.getRoundCountField().setText(setup.plannedRounds() > 0 ? String.valueOf(setup.plannedRounds()) : "");
+        if (setup.doubles() != view.getDoublesBox().isSelected()) view.getDoublesBox().doClick();
+        if (setup.groupKo() != null) {
+            view.getGroupSizeField().setText(String.valueOf(setup.groupKo().groupSize()));
+            view.getQualifiersField().setText(String.valueOf(setup.groupKo().qualifiersPerGroup()));
+            view.getBestNextField().setText(String.valueOf(setup.groupKo().bestNextPlaced()));
+            view.getThirdPlaceBox().setSelected(setup.groupKo().thirdPlaceMatch());
+        }
+        controller.playerList.addAll(setup.players());
+        controller.updatePlayerList();
+        controller.replaceableTournament = setup.name();
+        view.setVisible(true);
+    }
 
     /**
      * Constructs a TournamentController with the specified view.
@@ -58,6 +102,8 @@ public class TournamentController {
             view.getRemovePlayerButton().setText(doubles() ? "Doppel entfernen" : "Spieler entfernen");
         });
         view.getLoadMenuItem().addActionListener(_ -> loadTournamentFromFile());
+        view.getImportMenuItem().addActionListener(_ -> importParticipants());
+        view.getExportMenuItem().addActionListener(_ -> exportParticipants());
 
         view.addWindowListener(new WindowAdapter() {
             @Override
@@ -260,7 +306,9 @@ public class TournamentController {
             groupKo = new GroupKoState(groupSize, perGroup, bestNext, view.getThirdPlaceBox().isSelected());
         }
         File existing = TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), tournamentName);
-        if (existing.exists() && JOptionPane.showConfirmDialog(view,
+        boolean sameTournament = replaceableTournament != null && TournamentStorage.isSameFile(existing,
+                TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), replaceableTournament));
+        if (existing.exists() && !sameTournament && JOptionPane.showConfirmDialog(view,
                 "Unter dem Namen „" + tournamentName + "“ ist bereits ein Turnier gespeichert:\n"
                         + existing.getAbsolutePath() + "\n\n"
                         + "Ein neues Turnier ersetzt diesen Stand, auch die alten Rundensicherungen\n"
@@ -340,6 +388,48 @@ public class TournamentController {
                         "Fehler", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+
+    /**
+     * Imports participants from a CSV file and adds the valid ones to the list.
+     */
+    private void importParticipants() {
+        JFileChooser chooser = new JFileChooser(TournamentStorage.defaultSaveDirectory());
+        chooser.setFileFilter(new FileNameExtensionFilter("CSV-Dateien (*.csv, *.txt)", "csv", "txt"));
+        chooser.setDialogTitle(doubles() ? "Doppel importieren" : "Teilnehmer importieren");
+        if (chooser.showOpenDialog(view) != JFileChooser.APPROVE_OPTION) return;
+        try {
+            String text = ParticipantCsv.decode(java.nio.file.Files.readAllBytes(chooser.getSelectedFile().toPath()));
+            ParticipantCsv.ImportResult result = ParticipantCsv.parse(text, doubles(), playerList);
+            playerList.addAll(result.players());
+            updatePlayerList();
+            StringBuilder message = new StringBuilder(result.players().size() + (doubles() ? " Doppel" : " Teilnehmer")
+                    + " übernommen.");
+            if (!result.errors().isEmpty()) {
+                message.append("\n\nNicht übernommen:\n")
+                        .append(String.join("\n", result.errors().subList(0, Math.min(15, result.errors().size()))));
+                if (result.errors().size() > 15) message.append("\n… und ").append(result.errors().size() - 15).append(" weitere");
+            }
+            JOptionPane.showMessageDialog(view, message.toString(), "Import",
+                    result.errors().isEmpty() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(view, "Die Datei konnte nicht gelesen werden:\n" + e.getMessage(),
+                    "Import", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Saves the participant list as CSV, e.g. to reuse it for the next tournament.
+     */
+    private void exportParticipants() {
+        if (playerList.isEmpty()) {
+            JOptionPane.showMessageDialog(view, "Die Teilnehmerliste ist leer.");
+            return;
+        }
+        String name = view.getTournamentNameField().getText().isBlank() ? "Teilnehmer"
+                : TournamentStorage.sanitizeFileName(view.getTournamentNameField().getText()) + "_Teilnehmer";
+        File target = CsvFiles.chooseTarget(view, "Teilnehmer exportieren", name);
+        if (target != null) CsvFiles.write(view, target, ParticipantCsv.format(playerList));
     }
 
     /**

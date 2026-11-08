@@ -26,6 +26,7 @@ public class TournamentRoundView extends JFrame {
     private final JButton manipulateButton;
     private final JButton undoRoundButton;
     private final JButton printTableButton;
+    private final JLabel saveInfoLabel;
     private final JButton crossTableButton;
     private final JButton bracketButton;
     private final JButton withdrawPlayerButton;
@@ -140,7 +141,8 @@ public class TournamentRoundView extends JFrame {
         JPanel bottomButtonPanel = new JPanel(new WrapLayout(FlowLayout.CENTER, 10, 10));
         bottomButtonPanel.setBackground(UITheme.BACKGROUND);
 
-        printTableButton = UITheme.createSecondaryButton("Tabelle drucken");
+        printTableButton = UITheme.createSecondaryButton("Drucken / Export …");
+        printTableButton.setToolTipText("Rangliste bzw. Gruppentabellen, Ergebnisliste, Siegerliste drucken; CSV-Export; Kopie des Turnierstands");
         bottomButtonPanel.add(printTableButton);
 
         crossTableButton = UITheme.createSecondaryButton("Kreuztabelle");
@@ -166,7 +168,20 @@ public class TournamentRoundView extends JFrame {
         nextRoundButton = UITheme.createPrimaryButton("Nächste Runde auslosen");
         bottomButtonPanel.add(nextRoundButton);
 
-        add(bottomButtonPanel, BorderLayout.SOUTH);
+        // where the tournament is saved, and a copy e.g. on a USB stick
+        saveInfoLabel = new JLabel(" ");
+        saveInfoLabel.setFont(UITheme.FONT_BODY.deriveFont(12f));
+        saveInfoLabel.setForeground(UITheme.TEXT_MUTED);
+        JPanel saveRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        saveRow.setBackground(UITheme.BACKGROUND);
+        saveRow.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
+        saveRow.add(saveInfoLabel);
+
+        JPanel south = new JPanel(new BorderLayout());
+        south.setBackground(UITheme.BACKGROUND);
+        south.add(bottomButtonPanel, BorderLayout.CENTER);
+        south.add(saveRow, BorderLayout.SOUTH);
+        add(south, BorderLayout.SOUTH);
     }
 
     /**
@@ -289,6 +304,16 @@ public class TournamentRoundView extends JFrame {
      */
     public JButton getPrintTableButton() {
         return printTableButton;
+    }
+
+    /**
+     * Shows where and when the tournament was saved automatically.
+     *
+     * @param text the information, e.g. "Automatisch gespeichert 14:32 in C:\...\Turnier.ser"
+     */
+    public void showSaveInfo(String text) {
+        saveInfoLabel.setText(text);
+        saveInfoLabel.setToolTipText(text);
     }
 
     /**
