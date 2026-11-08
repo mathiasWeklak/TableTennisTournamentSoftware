@@ -37,6 +37,7 @@ public class TournamentRound {
     private final ScoreCalculator scoreCalculator;
     private final TournamentRoundView view;
     private CrossTableController crossTable;
+    private RefereeSheetsController refereeSheets;
 
     private int currentRound;
 
@@ -95,8 +96,8 @@ public class TournamentRound {
         // the engine shares playerList, so late registrations are paired from the next round on
         this.pairingEngine = new PairingEngine(this.playerList, tableNumber, mode);
         this.scoreCalculator = new ScoreCalculator(pairingEngine.getAllMatches(), mode);
-        // Round Robin: all matches of a withdrawn player are struck (live view of the withdrawn set)
-        this.scoreCalculator.setAnnulledPlayers(pairingEngine.getWithdrawn());
+        // Round Robin and group stage: the matches of a withdrawn player are struck
+        this.scoreCalculator.setAnnulledPlayers(pairingEngine.annulledPlayers());
         if (mode == TournamentMode.GROUPS_KO && groupKo != null) {
             // new tournament: snake distribution in seeding order; loaded tournament: saved groups
             pairingEngine.setGroupKo(skipInitialPairing ? groupKo
@@ -105,6 +106,7 @@ public class TournamentRound {
         }
 
         this.view = new TournamentRoundView(tournamentName, mode);
+        if (doubles) view.useDoublesLabels();
         wireActions();
 
         if (!skipInitialPairing) {
@@ -215,6 +217,7 @@ public class TournamentRound {
      * status, an open cross table and the enabled state of the buttons.
      */
     public void updateResultsTable() {
+        scoreCalculator.setAnnulledPlayers(pairingEngine.annulledPlayers());
         scoreCalculator.calculate(playerList);
         List<Standings.Entry> standings = currentStandings();
 
@@ -243,7 +246,9 @@ public class TournamentRound {
     }
 
     private List<Standings.Entry> currentStandings() {
-        return Standings.compute(playerList, mode, countingMatches());
+        // Round Robin: withdrawn players are struck, the ranks are computed without them
+        return Standings.computeWithout(playerList, mode, countingMatches(),
+                mode == TournamentMode.ROUND_ROBIN ? pairingEngine.getWithdrawn() : Set.of());
     }
 
     /**
@@ -253,7 +258,7 @@ public class TournamentRound {
      * @return the counting matches
      */
     private List<Match> countingMatches() {
-        return ScoreCalculator.countingMatches(pairingEngine.getAllMatches(), mode, pairingEngine.getWithdrawn());
+        return ScoreCalculator.countingMatches(pairingEngine.getAllMatches(), mode, pairingEngine.annulledPlayers());
     }
 
     private void updateControls() {
@@ -262,7 +267,10 @@ public class TournamentRound {
         view.getNextRoundButton().setEnabled(!finished);
         view.getUndoRoundButton().setEnabled(pairingEngine.canUndoLastRound());
         view.getWithdrawPlayerButton().setEnabled(!finished);
-        if (view.getAddPlayerButton() != null) view.getAddPlayerButton().setEnabled(!finished);
+        // a late registration is paired from the next round on: not in the last planned round
+        if (view.getAddPlayerButton() != null) {
+            view.getAddPlayerButton().setEnabled(!finished && (plannedRounds == 0 || currentRound < plannedRounds));
+        }
         if (view.getManipulateButton() != null) view.getManipulateButton().setEnabled(!finished);
         boolean hasMatches = pairingEngine.getMatches().stream().anyMatch(m -> m.getSecondPlayer() != null);
         view.getPreviewRefereeSheetsButton().setEnabled(hasMatches && !finished);
@@ -299,7 +307,9 @@ public class TournamentRound {
             Player a = m.getFirstPlayer();
             String stage = stageLabel(m, koRounds);
             if (m.getSecondPlayer() == null) {
-                String bye = m.getKoRound() > 0 ? "Freilos, kommt weiter"
+                String bye = m.isThirdPlace() ? "kampflos Platz 3"
+                        : m.getKoRound() > 0 && m.getKoRound() == koRounds ? "kampflos Turniersieg"
+                        : m.getKoRound() > 0 ? "Freilos, kommt weiter"
                         : mode == TournamentMode.SWISS ? "Freilos" : "spielfrei";
                 sb.append("           ").append(stage).append(a.getFullName()).append(" (").append(a.getClub()).append(") – ")
                         .append(bye).append('\n');
@@ -329,9 +339,13 @@ public class TournamentRound {
         return "";
     }
 
-    private String finalPlacingText() {
+    private List<Map.Entry<Player, Integer>> finalPlacing() {
         List<Match> ko = pairingEngine.getAllMatches().stream().filter(m -> m.getKoRound() > 0).toList();
-        List<Map.Entry<Player, Integer>> placing = GroupKnockout.finalPlacing(ko, pairingEngine.knockoutRounds());
+        return GroupKnockout.finalPlacing(ko, pairingEngine.knockoutRounds());
+    }
+
+    private String finalPlacingText() {
+        List<Map.Entry<Player, Integer>> placing = finalPlacing();
         if (placing.isEmpty()) return "";
         StringBuilder sb = new StringBuilder("\n\nEndplatzierung:\n");
         for (Map.Entry<Player, Integer> e : placing) {
@@ -350,7 +364,8 @@ public class TournamentRound {
     List<GroupTables.Table> groupTables(boolean compact) {
         GroupKoState groupKo = pairingEngine.getGroupKo();
         if (groupKo == null) return List.of();
-        return GroupTables.build(groupKo, countingMatches(), pairingEngine.getWithdrawn(), knockoutParticipants(), compact);
+        return GroupTables.build(groupKo, countingMatches(), pairingEngine.annulledPlayers(), pairingEngine.getWithdrawn(),
+                knockoutParticipants(), compact);
     }
 
     /**
@@ -430,10 +445,21 @@ public class TournamentRound {
     // ---------------------------------------------------------------------------------------
 
     private void previewRefereeSheets() {
+        closeRefereeSheets(); // one window, always with the current pairings
         List<Match> matchesWithoutBye = pairingEngine.getMatches().stream()
                 .filter(match -> match.getSecondPlayer() != null)
                 .toList();
-        new RefereeSheetsController(view, matchesWithoutBye, tournamentName, currentRound);
+        // on the sheet "Runde 3" is enough (no "von 7"), so the tournament name fits next to it
+        refereeSheets = new RefereeSheetsController(view, matchesWithoutBye, tournamentName,
+                mode == TournamentMode.GROUPS_KO ? roundLabel() : "Runde " + currentRound, pairingEngine.knockoutRounds());
+    }
+
+    /** Closes an open referee sheets window, e.g. because the pairings changed. */
+    private void closeRefereeSheets() {
+        if (refereeSheets != null) {
+            refereeSheets.close();
+            refereeSheets = null;
+        }
     }
 
     private void manipulatePairings() {
@@ -448,7 +474,7 @@ public class TournamentRound {
         List<Match> allPossibleOpenMatches = pairingEngine.calculateAllPossibleOpenMatches();
         allPossibleOpenMatches.sort(Comparator.comparing(match -> match.getFirstPlayer().getFullName()));
         Set<Match> uniqueMatches = new LinkedHashSet<>(allPossibleOpenMatches);
-        new MatchManagerController(view, uniqueMatches, pairingEngine.activePlayers().size(), this)
+        new MatchManagerController(view, uniqueMatches, pairingEngine.currentRoundPlayers().size(), this)
                 .getView().setVisible(true);
     }
 
@@ -504,6 +530,7 @@ public class TournamentRound {
             return;
         }
         currentRound++;
+        closeRefereeSheets();
         updateResultsTable();
         saveTournamentState();
     }
@@ -523,28 +550,35 @@ public class TournamentRound {
         }
         pairingEngine.undoLastRound();
         currentRound--;
+        closeRefereeSheets();
         updateResultsTable();
         saveTournamentState();
     }
 
     private void withdrawPlayer() {
+        String title = doubles ? "Doppel zurückziehen" : "Spieler zurückziehen";
         List<Player> active = pairingEngine.activePlayers();
         if (active.size() <= 2) {
-            JOptionPane.showMessageDialog(view, "Es müssen mindestens zwei Spieler im Turnier bleiben.",
-                    "Spieler zurückziehen", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(view, doubles ? "Es müssen mindestens zwei Doppel im Turnier bleiben."
+                            : "Es müssen mindestens zwei Spieler im Turnier bleiben.", title, JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        JComboBox<Player> box = new JComboBox<>(active.toArray(new Player[0]));
+        boolean knockoutStage = mode == TournamentMode.GROUPS_KO && currentRound > pairingEngine.groupRounds();
+        // knockout stage: only participants of the running knockout round can withdraw
+        List<Player> candidates = knockoutStage ? pairingEngine.currentRoundPlayers() : active;
+        if (candidates.isEmpty()) return;
+        JComboBox<Player> box = new JComboBox<>(candidates.toArray(new Player[0]));
         int choice = JOptionPane.showConfirmDialog(view,
-                new Object[]{"Welcher Spieler zieht sich zurück?", box,
+                new Object[]{doubles ? "Welches Doppel zieht sich zurück?" : "Welcher Spieler zieht sich zurück?", box,
                         switch (mode) {
-                            case ROUND_ROBIN -> "Alle seine Spiele werden gestrichen, auch die bereits gespielten.\n"
-                                    + "In den restlichen Runden sind seine Gegner spielfrei.";
-                            case GROUPS_KO -> "Vorrunde: alle seine Gruppenspiele werden gestrichen.\n"
-                                    + "KO-Runde: sein nächster Gegner kommt kampflos weiter.";
-                            case SWISS -> "Bisherige Ergebnisse bleiben bestehen. Ab der nächsten Auslosung wird er nicht mehr gepaart.";
+                            case ROUND_ROBIN -> "Alle Spiele werden gestrichen, auch die bereits gespielten.\n"
+                                    + "In den restlichen Runden sind die Gegner spielfrei.";
+                            case GROUPS_KO -> knockoutStage
+                                    ? "Die Gruppenergebnisse bleiben bestehen.\nDer nächste Gegner kommt kampflos weiter."
+                                    : "Alle Gruppenspiele werden gestrichen, auch die bereits gespielten.";
+                            case SWISS -> "Bisherige Ergebnisse bleiben bestehen. Ab der nächsten Auslosung wird nicht mehr gepaart.";
                         }},
-                "Spieler zurückziehen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+                title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         Player player = (Player) box.getSelectedItem();
         if (choice != JOptionPane.OK_OPTION || player == null) return;
         pairingEngine.withdraw(player);
@@ -557,7 +591,7 @@ public class TournamentRound {
                         && !m.isDecided());
         if (openMatch) {
             JOptionPane.showMessageDialog(view, player.getFullName() + " hat in dieser Runde noch ein offenes Spiel.\n"
-                    + "Bitte das Ergebnis erfassen (bei Nichtantritt z. B. 3:0 mit 11:0-Sätzen für den Gegner).");
+                    + "Bitte das Ergebnis mit der Schaltfläche „Kampflos“ in der Ergebniserfassung eintragen.");
         }
     }
 
@@ -606,6 +640,7 @@ public class TournamentRound {
      */
     public void setNewMatches(List<Match> selectedMatches) {
         pairingEngine.setNewMatches(selectedMatches);
+        closeRefereeSheets();
         updateResultsTable();
         saveTournamentState();
     }
@@ -634,8 +669,8 @@ public class TournamentRound {
         List<CrossTableController.Section> sections = new ArrayList<>();
         for (int g = 0; g < groupKo.groups().size(); g++) {
             sections.add(new CrossTableController.Section("Gruppe " + GroupKoState.groupName(g + 1),
-                    Standings.compute(groupKo.groups().get(g), TournamentMode.ROUND_ROBIN, counting).stream()
-                            .map(Standings.Entry::player).toList()));
+                    Standings.computeWithout(groupKo.groups().get(g), TournamentMode.ROUND_ROBIN, counting,
+                            pairingEngine.annulledPlayers()).stream().map(Standings.Entry::player).toList()));
         }
         return sections;
     }
@@ -653,7 +688,13 @@ public class TournamentRound {
         if (mode == TournamentMode.GROUPS_KO) {
             String heading = "Gruppen: " + tournamentName + "  —  " + roundLabel()
                     + (pairingEngine.isFinished() ? " (Endstand)" : "");
-            PrintUtil.print(view, GroupTablesPanel.printable(groupTables(true), heading), "Gruppen - " + tournamentName);
+            List<Object[]> placing = new ArrayList<>();
+            if (pairingEngine.isFinished()) {
+                for (Map.Entry<Player, Integer> e : finalPlacing()) {
+                    placing.add(new Object[]{e.getValue() + ".", e.getKey().getFullName(), e.getKey().getClub()});
+                }
+            }
+            PrintUtil.print(view, GroupTablesPanel.printable(groupTables(true), placing, heading), "Gruppen - " + tournamentName);
             return;
         }
         PrintUtil.printTable(view, view.getResultsTable(), "Rangliste - " + tournamentName,

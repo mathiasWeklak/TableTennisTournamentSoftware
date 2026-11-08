@@ -62,6 +62,27 @@ public final class Standings {
         return result;
     }
 
+    /**
+     * Computes the standings without the struck players (withdrawn players whose matches are
+     * annulled); they are appended at the end in seeding order and get no real rank (the value
+     * is one more than the number of ranked players).
+     *
+     * @param players all players in seeding order
+     * @param mode    the tournament mode
+     * @param matches the counting matches
+     * @param struck  players without rank
+     * @return the standings, best first, struck players last
+     */
+    public static List<Entry> computeWithout(List<Player> players, TournamentMode mode, List<Match> matches,
+                                             Set<Player> struck) {
+        if (struck.isEmpty()) return compute(players, mode, matches);
+        List<Entry> result = new ArrayList<>(compute(players.stream().filter(p -> !struck.contains(p)).toList(),
+                mode, matches));
+        int unranked = result.size() + 1;
+        players.stream().filter(struck::contains).forEach(p -> result.add(new Entry(p, unranked)));
+        return result;
+    }
+
     private static Comparator<Player> swissComparator() {
         return Comparator.comparingInt(Player::getPoints).reversed()
                 .thenComparing(Comparator.comparingDouble(Player::getBuchholz).reversed())

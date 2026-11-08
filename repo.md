@@ -33,7 +33,7 @@ src/
 │   │   ├── ResultEntryController.java      # Result entry incl. earlier rounds, unsaved-change check
 │   │   ├── MatchManagerController.java     # Manual pairing changes (Swiss)
 │   │   ├── CrossTableController.java       # Cross table, refresh and compact print
-│   │   ├── RefereeSheetsController.java    # Referee sheets (6 per page)
+│   │   ├── RefereeSheetsController.java    # Referee sheets (6 per page, fixed margins, names fitted, stage per match)
 │   │   ├── PlayerDialog.java               # Add/edit player dialog, duplicate name check
 │   │   ├── PrintUtil.java                  # Table printing, MessageFormat escaping
 │   │   └── ErrorHandler.java               # Error dialog and log file for uncaught exceptions
@@ -67,6 +67,10 @@ Each round is paired as a whole by a minimum-cost perfect matching without remat
 - Qualifiers: first n of every group plus the x best on place n+1 (per-match comparison)
 - Bracket: group winners before runners-up before further qualifiers (TTR within each level), byes for the best seeds, same-group participants as far apart as possible
 - Group tables instead of a ranking list: fixed group order, result matrix, games, sets, balls, points, place; qualifiers highlighted (provisional during the group stage); printed one group per block
+- Withdrawal: group stage strikes all group matches (`PairingEngine.annulledPlayers()`); knockout stage withdrawals are recorded in `GroupKoState.knockoutWithdrawn` (empty in older files, which fall back to the bracket) and keep the group results, also after the knockout draw is taken back, the opponent advances by walkover (also final and match for third place); withdrawal dialog in the knockout stage lists only participants of the running round
+- A round consisting of byes only is kept and does not end the tournament
+- Bracket separation: swaps within a seeding level first, across levels only if the groups are separated strictly better; byes never move (always the best seeds)
+- Final placing: a participant who withdraws in the knockout stage loses his next match by walkover and gets that round's place, whether the match was drawn before (result "kampflos") or after (bye for the opponent; `GroupKnockout.loserOf` derives the loser from the previous round); a single remaining qualifier wins the final by walkover
 - Knockout best of five; match for third place optional (`GroupKoState.noThirdPlaceMatch`, stored negated so older files keep the match)
 
 ### Doubles
@@ -91,7 +95,8 @@ Each round is paired as a whole by a minimum-cost perfect matching without remat
 
 ## Persistence
 
-- Auto-save after every result entry, pairing change, round change and on close
+- Auto-save right after the first draw, after every result entry, pairing change, round change and on close
+- Starting a new tournament whose `<name>.ser` exists asks first; loading another file (round backup, other folder) while `<name>.ser` exists asks first, because saving continues in `<name>.ser`
 - `<name>.ser` holds the current state; `<name>_Runde_N.ser` is a backup after completed round N
 - Files are stored in the user's documents folder (as reported by the OS), otherwise in the home directory
 - Writes are atomic; loading accepts only JDK base/collection classes and the model
@@ -139,6 +144,8 @@ Each round is paired as a whole by a minimum-cost perfect matching without remat
 | `controller.StandingsAndRoundFeaturesTest`, `controller.ReviewFixesTest` | Ranking, direct comparison, withdrawal, undo, seeding, helpers |
 | `controller.GroupKnockoutTest`, `controller.DoublesAndGroupUiTest` | Groups, bracket, whole group/KO tournaments, third place option, doubles, saving |
 | `controller.GroupTablesTest` | Group tables: result matrix, place, qualifiers, withdrawal, panel and printing |
+| `controller.ReviewRound2Test` | Bye-only rounds, withdrawal in the knockout stage, ranks without withdrawn players, bracket byes, manual pairing, late entry, locked knockout results, referee sheets |
+| `view.ResultEntryHeaderTest` | Result entry headers for single players and pairs |
 | `controller.TournamentStorageTest`, `controller.ControllerHelpersTest` | Saving/loading, file names, escaping, duplicate names |
 | `TournamentStateTest`, `TournamentStateRoundtripTest` | State record and serialization |
 | `view.ResultEntryViewTest` | Walkover entry |

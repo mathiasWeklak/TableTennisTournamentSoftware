@@ -135,11 +135,12 @@ public class CrossTableController {
             }
         };
 
+        java.util.Map<Player, String> shortNames = Player.uniqueShortNames(players);
         for (int i = 0; i < n; i++) {
             Player rowPlayer = players.get(i);
             Object[] row = new Object[n + 1];
             row[0] = compact
-                    ? (i + 1) + ". " + rowPlayer.getShortName()
+                    ? (i + 1) + ". " + shortNames.get(rowPlayer)
                     : (i + 1) + ". " + rowPlayer.getFullName() + " (" + rowPlayer.getClub() + ")";
             for (int j = 0; j < n; j++) {
                 row[j + 1] = i == j ? "-" : resultFor(allMatches, rowPlayer, players.get(j));

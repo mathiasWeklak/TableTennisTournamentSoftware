@@ -9,6 +9,7 @@ import model.Player;
 import model.TournamentMode;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -125,8 +126,15 @@ public class TournamentSimulation {
                 match.setOverallResult(setsFirstPlayer + ":" + setsSecondPlayer);
 
                 int totalSets = setsFirstPlayer + setsSecondPlayer;
+                // the winner wins the last set; the sets before are in random order
+                boolean firstWinsMatch = setsFirstPlayer > setsSecondPlayer;
+                List<Boolean> order = new ArrayList<>();
+                for (int i = 0; i < setsFirstPlayer - (firstWinsMatch ? 1 : 0); i++) order.add(true);
+                for (int i = 0; i < setsSecondPlayer - (firstWinsMatch ? 0 : 1); i++) order.add(false);
+                Collections.shuffle(order, rand);
+                order.add(firstWinsMatch);
                 for (int i = 0; i < totalSets; i++) {
-                    boolean firstWinsSet = i < setsFirstPlayer;
+                    boolean firstWinsSet = order.get(i);
                     int loser = rand.nextInt(10);
                     String[] setResult = firstWinsSet
                             ? new String[]{"11", String.valueOf(loser)}

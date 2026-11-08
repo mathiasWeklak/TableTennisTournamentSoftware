@@ -236,8 +236,8 @@ public final class GroupKnockout {
 
     /**
      * Builds the bracket: seeds by level and TTR, standard seed positions, byes for the best
-     * seeds, then participants of the same group are moved apart (only within their seeding level,
-     * so the seeding stays intact).
+     * seeds, then participants of the same group are moved apart (group winners and byes stay; first
+     * within their seeding level, across levels only where that separates the groups better).
      *
      * @param levels  the qualifiers by seeding level (see {@link #qualifiers})
      * @param groupOf the group number of every participant
@@ -271,8 +271,16 @@ public final class GroupKnockout {
     /**
      * Swaps qualifiers that are not group winners until participants of the same group meet as
      * late as possible (local search; the cost of a pair meeting in round r is 4^(rounds - r)).
+     * First only within a seeding level; then across levels where this separates the groups even
+     * better, but only between slots that both have a bye or both have none: byes always stay with
+     * the best seeds.
      */
     private static void separateGroups(Player[] slots, int[] slotLevel, Map<Player, Integer> groupOf) {
+        localSearch(slots, slotLevel, groupOf, true);
+        localSearch(slots, slotLevel, groupOf, false);
+    }
+
+    private static void localSearch(Player[] slots, int[] slotLevel, Map<Player, Integer> groupOf, boolean sameLevelOnly) {
         int rounds = knockoutRounds(slots.length);
         boolean improved = true;
         for (int iteration = 0; improved && iteration < 200; iteration++) {
@@ -280,8 +288,10 @@ public final class GroupKnockout {
             long current = separationCost(slots, groupOf, rounds);
             for (int i = 0; i < slots.length; i++) {
                 for (int j = i + 1; j < slots.length; j++) {
-                    // group winners stay on their seeded positions; all other qualifiers may be swapped
+                    // group winners stay on their seeded positions
                     if (slots[i] == null || slots[j] == null || slotLevel[i] == 0 || slotLevel[j] == 0) continue;
+                    if (sameLevelOnly && slotLevel[i] != slotLevel[j]) continue;
+                    if ((slots[i ^ 1] == null) != (slots[j ^ 1] == null)) continue; // byes stay put
                     swap(slots, i, j);
                     long cost = separationCost(slots, groupOf, rounds);
                     if (cost < current) {
@@ -400,7 +410,10 @@ public final class GroupKnockout {
     /**
      * Final placing after the knockout stage: 1 final winner, 2 final loser, 3 and 4 from the match
      * for third place (or both semi-final losers on 3 if it was not played), then the losers of
-     * earlier rounds sharing a place (5, 9, 17, ...).
+     * earlier rounds sharing a place (5, 9, 17, ...). A participant who withdraws in the knockout
+     * stage loses his next match by walkover and gets the place of that round, whether the match
+     * was drawn before (result "kampflos") or after the withdrawal (bye for the opponent, see
+     * {@link #loserOf}).
      *
      * @param koMatches   all knockout matches
      * @param totalRounds number of knockout rounds
@@ -411,27 +424,56 @@ public final class GroupKnockout {
         Match finalMatch = find(koMatches, totalRounds, 0, false);
         if (finalMatch != null && finalMatch.getWinner() != null) {
             result.add(Map.entry(finalMatch.getWinner(), 1));
-            if (finalMatch.getLoser() != null) result.add(Map.entry(finalMatch.getLoser(), 2));
+            Player loser = loserOf(koMatches, finalMatch);
+            if (loser != null) result.add(Map.entry(loser, 2));
+        }
+        List<Player> semiLosers = new ArrayList<>();
+        if (totalRounds >= 2) {
+            for (Match semi : koMatches) {
+                if (semi.getKoRound() != totalRounds - 1 || semi.isThirdPlace()) continue;
+                Player loser = loserOf(koMatches, semi);
+                if (loser != null) semiLosers.add(loser);
+            }
         }
         Match third = find(koMatches, totalRounds, 0, true);
         if (third != null && third.getWinner() != null) {
             result.add(Map.entry(third.getWinner(), 3));
-            if (third.getLoser() != null) result.add(Map.entry(third.getLoser(), 4));
-        } else if (totalRounds >= 2) {
-            for (Match semi : koMatches) {
-                if (semi.getKoRound() == totalRounds - 1 && !semi.isThirdPlace() && semi.getLoser() != null) {
-                    result.add(Map.entry(semi.getLoser(), 3));
-                }
+            for (Player loser : semiLosers) {
+                // the loser of the match for third place, or the one who gave it up by withdrawing
+                if (!loser.equals(third.getWinner())) result.add(Map.entry(loser, 4));
             }
+        } else {
+            semiLosers.forEach(loser -> result.add(Map.entry(loser, 3)));
         }
         for (int r = totalRounds - 2; r >= 1; r--) {
             int place = (1 << (totalRounds - r)) + 1; // quarter-final losers 5, round of 16 losers 9, ...
             for (Match m : koMatches) {
-                if (m.getKoRound() == r && !m.isThirdPlace() && m.getLoser() != null) {
-                    result.add(Map.entry(m.getLoser(), place));
-                }
+                if (m.getKoRound() != r || m.isThirdPlace()) continue;
+                Player loser = loserOf(koMatches, m);
+                if (loser != null) result.add(Map.entry(loser, place));
             }
         }
         return result;
+    }
+
+    /**
+     * Returns the loser of a knockout match. For a bye in a later round this is the participant
+     * who won his previous match but withdrew before this one (he loses by walkover); a bye of
+     * the draw in the first round has no loser.
+     *
+     * @param koMatches all knockout matches
+     * @param match     a knockout match (not the match for third place)
+     * @return the loser, or {@code null} if there is none (yet)
+     */
+    static Player loserOf(List<Match> koMatches, Match match) {
+        if (match.getSecondPlayer() != null) return match.getLoser();
+        int round = match.getKoRound();
+        if (round <= 1 || match.isThirdPlace()) return null;
+        for (int slot = 2 * match.getKoSlot(); slot <= 2 * match.getKoSlot() + 1; slot++) {
+            Match previous = find(koMatches, round - 1, slot, false);
+            Player winner = previous == null ? null : previous.getWinner();
+            if (winner != null && !winner.equals(match.getFirstPlayer())) return winner;
+        }
+        return null;
     }
 }

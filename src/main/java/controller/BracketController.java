@@ -102,7 +102,9 @@ public class BracketController {
         if (groupKo == null || groupKo.bracket().isEmpty()) {
             String text = "Der Turnierbaum wird nach der Vorrunde ausgelost.";
             if (groupKo != null) {
-                text += " Weiter kommen die ersten " + groupKo.qualifiersPerGroup() + " jeder Gruppe"
+                text += (groupKo.qualifiersPerGroup() == 1
+                        ? (groupKo.bestNextPlaced() > 0 ? " Weiter kommen der Erste" : " Weiter kommt der Erste")
+                        : " Weiter kommen die ersten " + groupKo.qualifiersPerGroup()) + " jeder Gruppe"
                         + (groupKo.bestNextPlaced() > 0
                         ? " und " + (groupKo.bestNextPlaced() == 1 ? "der beste " : "die " + groupKo.bestNextPlaced() + " besten ")
                         + "Gruppen-" + placedName(groupKo.qualifiersPerGroup() + 1) + (groupKo.bestNextPlaced() == 1 ? "" : "n")
@@ -133,12 +135,20 @@ public class BracketController {
                     a = b;
                     b = null;
                 }
+                Player walkoverLoser = m == null ? null : GroupKnockout.loserOf(ko, m);
+                if (m != null && m.getSecondPlayer() == null && walkoverLoser != null) {
+                    // the opponent withdrew after his previous match: walkover
+                    boxes.add(new Box(m.getFirstPlayer().getFullName(), walkoverLoser.getFullName() + " (zurückgezogen)",
+                            "", "", 1));
+                    continue;
+                }
                 boxes.add(box(a, b, m, byeKnown));
             }
             rounds.add(boxes);
         }
         Match third = GroupKnockout.find(ko, total, 0, true);
-        Box thirdBox = third == null ? null : box(third.getFirstPlayer(), third.getSecondPlayer(), third, false);
+        Box thirdBox = third == null ? null
+                : box(third.getFirstPlayer(), third.getSecondPlayer(), third, third.getSecondPlayer() == null);
         return new Model(names, rounds, thirdBox, null);
     }
 

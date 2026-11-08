@@ -30,11 +30,16 @@ public class RefereeSheetsController {
     /** Labels of the rows below the player header on a printed sheet. */
     private static final String[] ROW_LABELS = {"Satz 1", "Satz 2", "Satz 3", "Satz 4", "Satz 5", "Gesamt"};
 
+    /** Page margin for printing in points (half an inch), independent of the printer default. */
+    private static final double MARGIN = 36;
+
     private final Window owner;
     private final List<Match> matches;
     private final String tournamentName;
-    private final int round;
+    private final String roundLabel;
+    private final int koRounds;
     private RefereeSheetsView view;
+    private boolean closed;
 
     /**
      * Constructs the controller for the given list of matches and schedules UI initialization
@@ -46,10 +51,26 @@ public class RefereeSheetsController {
      * @param round          the current round number, printed on every sheet
      */
     public RefereeSheetsController(java.awt.Window owner, List<Match> matches, String tournamentName, int round) {
+        this(owner, matches, tournamentName, "Runde " + round, 0);
+    }
+
+    /**
+     * Constructs the controller for the given list of matches and schedules UI initialization
+     * on the Event Dispatch Thread.
+     *
+     * @param owner          the window owning the (modeless) referee sheets dialog; may be {@code null}
+     * @param matches        the matches of the current round without bye matches (second player != null)
+     * @param tournamentName the name of the tournament, printed on every sheet
+     * @param roundLabel     the current round, e.g. "Runde 3" or "KO-Runde: Halbfinale"
+     * @param koRounds       number of knockout rounds (names of knockout matches), 0 if not relevant
+     */
+    public RefereeSheetsController(java.awt.Window owner, List<Match> matches, String tournamentName,
+                                   String roundLabel, int koRounds) {
         this.owner = owner;
         this.matches = List.copyOf(matches);
         this.tournamentName = tournamentName;
-        this.round = round;
+        this.roundLabel = roundLabel;
+        this.koRounds = koRounds;
         SwingUtilities.invokeLater(this::initializeUI);
     }
 
@@ -57,21 +78,66 @@ public class RefereeSheetsController {
      * Initializes and displays the {@link RefereeSheetsView}.
      */
     private void initializeUI() {
+        if (closed) return;
         view = new RefereeSheetsView(owner, this, matches);
     }
 
     /**
-     * Returns the heading printed on every sheet, e.g. {@code "Stadtmeisterschaft – Runde 3"}.
+     * Closes the window (e.g. because the pairings changed and the sheets are outdated).
+     */
+    public void close() {
+        closed = true;
+        if (view != null) view.dispose();
+    }
+
+    /**
+     * Returns the heading of the window, e.g. {@code "Stadtmeisterschaft – Runde 3"}.
      * If no tournament name is set, only the round is returned.
      *
      * @return the heading consisting of tournament name and round
      */
     public String getHeaderText() {
-        String roundText = "Runde " + round;
-        if (tournamentName == null || tournamentName.isBlank()) {
-            return roundText;
+        return withTournament(roundLabel);
+    }
+
+    /**
+     * Returns the heading printed on the sheet of a match: tournament name and stage, e.g.
+     * {@code "Stadtmeisterschaft – Gruppe B, Runde 2"}, {@code "... – Halbfinale"} or
+     * {@code "... – Runde 3"}.
+     *
+     * @param match the match
+     * @return the heading
+     */
+    public String getHeaderText(Match match) {
+        return withTournament(stageOf(match));
+    }
+
+    /**
+     * Returns the stage of a match: "Gruppe B, Runde 2", a knockout round name or the round.
+     *
+     * @param match the match
+     * @return the stage
+     */
+    String stageOf(Match match) {
+        String stage;
+        if (match.getGroupNo() > 0) {
+            stage = "Gruppe " + model.GroupKoState.groupName(match.getGroupNo())
+                    + (match.getRound() > 0 ? ", Runde " + match.getRound() : "");
+        } else if (match.isThirdPlace()) {
+            stage = "Spiel um Platz 3";
+        } else if (match.getKoRound() > 0 && koRounds > 0) {
+            stage = GroupKnockout.roundName(match.getKoRound(), koRounds);
+        } else {
+            stage = roundLabel;
         }
-        return tournamentName.strip() + " – " + roundText;
+        return stage;
+    }
+
+    private String withTournament(String stage) {
+        if (tournamentName == null || tournamentName.isBlank()) {
+            return stage;
+        }
+        return tournamentName.strip() + " – " + stage;
     }
 
     /**
@@ -134,8 +200,30 @@ public class RefereeSheetsController {
     public void printRefereeSheets() {
         PrinterJob job = PrinterJob.getPrinterJob();
         job.setJobName("Schiedsrichterzettel");
+        // fixed margins: the printer default (often one inch) would leave too little room for names
+        java.awt.print.PageFormat format = job.defaultPage();
+        java.awt.print.Paper paper = format.getPaper();
+        paper.setImageableArea(MARGIN, MARGIN, paper.getWidth() - 2 * MARGIN, paper.getHeight() - 2 * MARGIN);
+        format.setPaper(paper);
 
-        job.setPrintable((graphics, pageFormat, pageIndex) -> {
+        job.setPrintable(printable(), job.validatePage(format));
+
+        if (job.printDialog()) {
+            try {
+                job.print();
+            } catch (PrinterException e) {
+                JOptionPane.showMessageDialog(view, "Fehler beim Drucken der Schiedsrichterzettel.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    /**
+     * Returns the sheets as printable, six per page (used for printing and tests).
+     *
+     * @return the printable
+     */
+    Printable printable() {
+        return (graphics, pageFormat, pageIndex) -> {
             int totalPages = (int) Math.ceil((double) matches.size() / SHEETS_PER_PAGE);
 
             if (pageIndex >= totalPages) {
@@ -168,15 +256,7 @@ public class RefereeSheetsController {
             }
 
             return Printable.PAGE_EXISTS;
-        });
-
-        if (job.printDialog()) {
-            try {
-                job.print();
-            } catch (PrinterException e) {
-                JOptionPane.showMessageDialog(view, "Fehler beim Drucken der Schiedsrichterzettel.", "Druckfehler", JOptionPane.ERROR_MESSAGE);
-            }
-        }
+        };
     }
 
     /**
@@ -206,15 +286,16 @@ public class RefereeSheetsController {
         }
 
         // Distribute the box height: title bar 1.2 units, player header 1 unit, each row 1 unit.
+        boolean twoLines = match.getFirstPlayer().isDoubles() || match.getSecondPlayer().isDoubles();
         double unit = boxHeight / (2.2 + ROW_LABELS.length);
         int titleBarHeight = (int) Math.min(24, Math.floor(unit * 1.2));
-        int headerHeight = (int) Math.min(20, Math.floor(unit));
+        int headerHeight = (int) (twoLines ? Math.min(32, Math.floor(unit * 1.2)) : Math.min(20, Math.floor(unit)));
         int rowHeight = (boxHeight - titleBarHeight - headerHeight - 2) / ROW_LABELS.length;
         rowHeight = Math.max(1, rowHeight);
 
         float baseSize = (float) Math.max(6, Math.min(10, rowHeight * 0.65));
         float titleSize = (float) Math.max(6, Math.min(12, titleBarHeight * 0.55));
-        float headerTextSize = (float) Math.max(6, Math.min(10, headerHeight * 0.6));
+        float headerTextSize = (float) Math.max(6, Math.min(10, headerHeight * (twoLines ? 0.34 : 0.6)));
         Font boldFont = new Font("Arial", Font.BOLD, 10).deriveFont(baseSize);
         Font plainFont = new Font("Arial", Font.PLAIN, 10).deriveFont(baseSize);
         Font headerFont = new Font("Arial", Font.BOLD, 10).deriveFont(headerTextSize);
@@ -240,7 +321,10 @@ public class RefereeSheetsController {
         FontMetrics tournamentFm = g2.getFontMetrics();
         int maxHeaderWidth = left + innerWidth - 8 - (tableLabelEnd + 12);
         if (maxHeaderWidth > 0) {
-            String header = truncate(getHeaderText(), tournamentFm, maxHeaderWidth);
+            // if both do not fit, the stage is more important than the tournament name
+            String header = getHeaderText(match);
+            if (tournamentFm.stringWidth(header) > maxHeaderWidth) header = stageOf(match);
+            header = truncate(header, tournamentFm, maxHeaderWidth);
             g2.drawString(header, left + innerWidth - 8 - tournamentFm.stringWidth(header), titleBaseline);
         }
 
@@ -248,7 +332,8 @@ public class RefereeSheetsController {
         g2.drawLine(left, top + titleBarHeight, left + innerWidth, top + titleBarHeight);
 
         int contentY = top + titleBarHeight + 1;
-        int labelColWidth = Math.min(90, innerWidth / 4);
+        // label column just wide enough for "Gesamt", so the names get the room
+        int labelColWidth = Math.min(innerWidth / 4, g2.getFontMetrics(boldFont).stringWidth("Gesamt") + 14);
         int playerColWidth = (innerWidth - labelColWidth) / 2;
         int col1X = left + labelColWidth;
         int col2X = col1X + playerColWidth;
@@ -257,15 +342,10 @@ public class RefereeSheetsController {
         g2.fillRect(left + 1, contentY, innerWidth - 1, headerHeight);
         g2.setColor(Color.BLACK);
 
-        g2.setFont(headerFont);
-        FontMetrics headerFm = g2.getFontMetrics();
-
-        String p1 = truncate(match.getFirstPlayer().getFullName(), headerFm, playerColWidth - 8);
-        String p2 = truncate(match.getSecondPlayer().getFullName(), headerFm, playerColWidth - 8);
-
-        int headerBaseline = contentY + (headerHeight + headerFm.getAscent() - headerFm.getDescent()) / 2;
-        g2.drawString(p1, col1X + 4, headerBaseline);
-        g2.drawString(p2, col2X + 4, headerBaseline);
+        drawNames(g2, nameLines(match.getFirstPlayer(), headerFont, g2, playerColWidth - 8), headerFont,
+                col1X + 4, contentY, playerColWidth - 8, headerHeight);
+        drawNames(g2, nameLines(match.getSecondPlayer(), headerFont, g2, playerColWidth - 8), headerFont,
+                col2X + 4, contentY, playerColWidth - 8, headerHeight);
 
         g2.drawLine(left, contentY + headerHeight, left + innerWidth, contentY + headerHeight);
 
@@ -274,28 +354,32 @@ public class RefereeSheetsController {
         for (int i = 0; i < ROW_LABELS.length; i++) {
             int rowY = rowsStartY + i * rowHeight;
             boolean isTotal = i == ROW_LABELS.length - 1;
+            // the total row takes the rest of the box (no empty strip below it)
+            int h = isTotal ? top + boxHeight - rowY : rowHeight;
 
             if (isTotal) {
                 g2.setColor(new Color(232, 245, 233));
-                g2.fillRect(left + 1, rowY, innerWidth - 1, rowHeight);
+                g2.fillRect(left + 1, rowY, innerWidth - 1, h);
                 g2.setColor(Color.BLACK);
                 g2.setFont(boldFont);
             } else {
                 g2.setColor(i % 2 == 0 ? Color.WHITE : new Color(248, 248, 252));
-                g2.fillRect(left + 1, rowY, innerWidth - 1, rowHeight);
+                g2.fillRect(left + 1, rowY, innerWidth - 1, h);
                 g2.setColor(Color.BLACK);
                 g2.setFont(plainFont);
             }
 
             FontMetrics rowFm = g2.getFontMetrics();
-            int textY = rowY + (rowHeight + rowFm.getAscent() - rowFm.getDescent()) / 2;
+            int textY = rowY + (h + rowFm.getAscent() - rowFm.getDescent()) / 2;
             g2.drawString(truncate(ROW_LABELS[i], rowFm, labelColWidth - 8), left + 6, textY);
 
-            g2.setStroke(new BasicStroke(0.5f));
-            g2.drawLine(left, rowY + rowHeight, left + innerWidth, rowY + rowHeight);
+            if (!isTotal) {
+                g2.setStroke(new BasicStroke(0.5f));
+                g2.drawLine(left, rowY + h, left + innerWidth, rowY + h);
+            }
         }
 
-        int gridBottom = rowsStartY + ROW_LABELS.length * rowHeight;
+        int gridBottom = top + boxHeight;
         g2.setStroke(new BasicStroke(1f));
         g2.drawLine(col1X, contentY, col1X, gridBottom);
         g2.drawLine(col2X, contentY, col2X, gridBottom);
@@ -305,6 +389,50 @@ public class RefereeSheetsController {
         g2.setColor(Color.BLACK);
         g2.drawRect(left, top, innerWidth, boxHeight);
         g2.setStroke(oldStroke);
+    }
+
+    /**
+     * Draws the names of a participant (one line, two for a pair), vertically centered. A name
+     * that is too wide is drawn smaller (down to 6 pt) and only then shortened.
+     */
+    private void drawNames(Graphics2D g2, List<String> names, Font font, int x, int top, int maxWidth, int height) {
+        Font fitted = font;
+        for (float size = font.getSize2D(); size > 6f
+                && (!fits(g2, fitted, names, maxWidth) || linesHeight(g2, fitted, names.size()) > height - 2); size -= 0.5f) {
+            fitted = font.deriveFont(size - 0.5f);
+        }
+        g2.setFont(fitted);
+        FontMetrics fm = g2.getFontMetrics();
+        int lineHeight = fm.getAscent() + fm.getDescent();
+        int y = top + (height - lineHeight * names.size()) / 2 + fm.getAscent();
+        for (String name : names) {
+            g2.drawString(truncate(name, fm, maxWidth), x, y);
+            y += lineHeight;
+        }
+    }
+
+    /**
+     * Name lines of a participant: a pair on two lines; a single player on one line, or on two
+     * (first name, last name) if the name does not fit at 8 pt.
+     */
+    private static List<String> nameLines(model.Player player, Font font, Graphics2D g2, int maxWidth) {
+        if (player.isDoubles()) return player.getPersonNames();
+        String full = player.getFullName();
+        if (fits(g2, font.deriveFont(Math.min(font.getSize2D(), 8f)), List.of(full), maxWidth)
+                || player.getFirstName().isBlank() || player.getLastName().isBlank()) {
+            return List.of(full);
+        }
+        return List.of(player.getFirstName(), player.getLastName());
+    }
+
+    private static int linesHeight(Graphics2D g2, Font font, int lines) {
+        FontMetrics fm = g2.getFontMetrics(font);
+        return (fm.getAscent() + fm.getDescent()) * lines;
+    }
+
+    private static boolean fits(Graphics2D g2, Font font, List<String> names, int maxWidth) {
+        FontMetrics fm = g2.getFontMetrics(font);
+        return names.stream().allMatch(n -> fm.stringWidth(n) <= maxWidth);
     }
 
     /**

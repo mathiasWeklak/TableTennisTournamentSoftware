@@ -162,12 +162,24 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
      * @return the printable
      */
     public static Printable printable(List<GroupTables.Table> tables, String title) {
+        return printable(tables, List.of(), title);
+    }
+
+    /**
+     * Returns a printable with all group boxes stacked and, if given, the final placing of the
+     * knockout stage at the end; scaled to the page width (never enlarged), page breaks only
+     * between boxes.
+     *
+     * @param tables  the group tables (compact names recommended)
+     * @param placing rows {place, name, club} of the final placing; empty while not finished
+     * @param title   the heading on every page
+     * @return the printable
+     */
+    public static Printable printable(List<GroupTables.Table> tables, List<Object[]> placing, String title) {
         List<JComponent> parts = new ArrayList<>();
+        if (!placing.isEmpty()) parts.add(layoutForPrint(createPlacingBox(placing)));
         for (GroupTables.Table t : tables) {
-            JPanel box = createBox(t);
-            box.setSize(box.getPreferredSize());
-            layoutTree(box);
-            parts.add(box);
+            parts.add(layoutForPrint(createBox(t)));
         }
         return new Printable() {
             private List<List<JComponent>> pages;
@@ -215,6 +227,51 @@ public class GroupTablesPanel extends JPanel implements Scrollable {
                 return PAGE_EXISTS;
             }
         };
+    }
+
+    private static JPanel layoutForPrint(JPanel box) {
+        box.setSize(box.getPreferredSize());
+        layoutTree(box);
+        return box;
+    }
+
+    /**
+     * Creates the box with the final placing (place, name, club).
+     *
+     * @param rows rows {place, name, club}
+     * @return the box
+     */
+    static JPanel createPlacingBox(List<Object[]> rows) {
+        DefaultTableModel model = new DefaultTableModel(new String[]{"Platz", "Name", "Verein"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        rows.forEach(model::addRow);
+        JTable table = new JTable(model);
+        UITheme.applyTableStyling(table);
+        table.setShowVerticalLines(true);
+        table.setFillsViewportHeight(false);
+        table.setIntercellSpacing(new Dimension(1, 1));
+        table.setRowHeight(26);
+        table.getTableHeader().setFont(UITheme.FONT_BODY.deriveFont(Font.BOLD));
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        int width = 0;
+        for (int c = 0; c < table.getColumnCount(); c++) {
+            int w = Math.max(c == 0 ? 60 : 120, contentWidth(table, c) + 4);
+            table.getColumnModel().getColumn(c).setPreferredWidth(w);
+            table.getColumnModel().getColumn(c).setMinWidth(w);
+            width += w;
+        }
+        table.setPreferredSize(new Dimension(width, table.getRowHeight() * table.getRowCount()));
+        table.getTableHeader().setPreferredSize(new Dimension(width, 28));
+        JPanel box = new JPanel(new BorderLayout());
+        box.setBackground(UITheme.SURFACE);
+        box.setBorder(UITheme.cardBorder("Endplatzierung"));
+        box.add(table.getTableHeader(), BorderLayout.NORTH);
+        box.add(table, BorderLayout.CENTER);
+        return box;
     }
 
     /** Lays out a component tree that is not displayed (for printing). */

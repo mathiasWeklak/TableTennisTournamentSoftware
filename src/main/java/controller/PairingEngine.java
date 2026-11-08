@@ -110,6 +110,9 @@ public class PairingEngine {
      */
     public void withdraw(Player player) {
         withdrawn.add(player);
+        if (groupKo != null && !groupKo.bracket().isEmpty() && !groupKo.knockoutWithdrawn().contains(player)) {
+            groupKo.knockoutWithdrawn().add(player); // knockout stage: the group results stay
+        }
     }
 
     /**
@@ -138,6 +141,40 @@ public class PairingEngine {
      */
     public List<Player> activePlayers() {
         return playerList.stream().filter(p -> !withdrawn.contains(p)).toList();
+    }
+
+    /**
+     * Returns the players of the current round who are not withdrawn. A player registered late is
+     * not part of the running round. Without a current round: all active players.
+     *
+     * @return the players, in the original order
+     */
+    public List<Player> currentRoundPlayers() {
+        if (matches.isEmpty()) return activePlayers();
+        Set<Player> inRound = new HashSet<>();
+        for (Match m : matches) {
+            inRound.add(m.getFirstPlayer());
+            if (m.getSecondPlayer() != null) inRound.add(m.getSecondPlayer());
+        }
+        return playerList.stream().filter(p -> inRound.contains(p) && !withdrawn.contains(p)).toList();
+    }
+
+    /**
+     * Returns the players whose matches are struck from the standings: in Round Robin every
+     * withdrawn player; in a group/knockout tournament the players who withdrew during the group
+     * stage. A withdrawal in the knockout stage keeps the group results (also if the knockout draw
+     * is taken back later); the opponent advances by walkover. Not used in the Swiss System.
+     *
+     * @return the players whose matches are struck
+     */
+    public Set<Player> annulledPlayers() {
+        if (mode != TournamentMode.GROUPS_KO || groupKo == null) {
+            return Collections.unmodifiableSet(withdrawn);
+        }
+        Set<Player> result = new HashSet<>(withdrawn);
+        groupKo.knockoutWithdrawn().forEach(result::remove);
+        groupKo.bracket().forEach(result::remove); // files of older versions: withdrawn from the bracket
+        return result;
     }
 
     /**
@@ -753,7 +790,7 @@ public class PairingEngine {
      */
     public List<List<Player>> rankedGroups() {
         List<List<Player>> ranked = new ArrayList<>();
-        List<Match> counting = ScoreCalculator.countingMatches(allMatches, mode, withdrawn);
+        List<Match> counting = ScoreCalculator.countingMatches(allMatches, mode, annulledPlayers());
         for (List<Player> g : groupKo.groups()) {
             ranked.add(Standings.compute(g, TournamentMode.ROUND_ROBIN, counting).stream()
                     .map(Standings.Entry::player)
@@ -787,7 +824,8 @@ public class PairingEngine {
                     for (Player p : groupKo.groups().get(g)) groupOf.put(p, g + 1);
                 }
                 int qualified = levels.stream().mapToInt(List::size).sum();
-                if (qualified < 2) {
+                // a single qualifier (all others withdrew) wins the final by walkover
+                if (qualified < 1) {
                     finished = true;
                     return null;
                 }
@@ -812,19 +850,27 @@ public class PairingEngine {
             if (koRound == total && total >= 2 && groupKo.thirdPlaceMatch()) {
                 // match for third place between the losers of the semi-finals
                 List<Player> losers = new ArrayList<>();
+                int forfeited = 0;
                 for (int slot = 0; slot < 2; slot++) {
                     Match semi = GroupKnockout.find(koMatches, total - 1, slot, false);
-                    Player loser = semi == null ? null : semi.getLoser();
-                    if (loser != null && !withdrawn.contains(loser)) losers.add(loser);
+                    Player loser = semi == null ? null : GroupKnockout.loserOf(koMatches, semi);
+                    if (loser == null) continue;
+                    if (withdrawn.contains(loser)) forfeited++;
+                    else losers.add(loser);
                 }
-                if (losers.size() == 2) {
-                    Match third = new Match(losers.get(0), losers.get(1), -1);
+                if (losers.size() == 2 || (losers.size() == 1 && forfeited == 1)) {
+                    // one semi-final loser withdrawn (also one who lost his semi-final by walkover): the
+                    // other one is third by walkover; a semi-final bye from the draw has no loser, then
+                    // there is no match for third place
+                    Match third = new Match(losers.get(0), losers.size() == 2 ? losers.get(1) : null, -1);
                     third.setKnockout(koRound, 0, true);
                     created.add(third);
                 }
             }
         }
-        if (created.stream().noneMatch(m -> m.getSecondPlayer() != null)) {
+        // a round may consist of byes only (e.g. after a withdrawal): it is kept, the group stage
+        // or the knockout stage goes on; only a round without any participant ends the tournament
+        if (created.isEmpty()) {
             finished = true;
             return null;
         }
@@ -965,7 +1011,7 @@ public class PairingEngine {
         currentRound.addAll(matches);
         List<Match> playedMatches = new ArrayList<>(allMatches);
         playedMatches.removeIf(currentRound::contains);
-        return calculatePairingDifference(generateAllPairings(activePlayers()), playedMatches, getPlayersWithBye(playedMatches));
+        return calculatePairingDifference(generateAllPairings(currentRoundPlayers()), playedMatches, getPlayersWithBye(playedMatches));
     }
 
     /**
@@ -976,6 +1022,14 @@ public class PairingEngine {
         // that merely has the same players (Match.equals compares the player pair)
         Set<Match> currentRound = Collections.newSetFromMap(new IdentityHashMap<>());
         currentRound.addAll(matches);
+        // points before the round, as stamped at the pairing; the current points may already
+        // contain the bye point or results of this round
+        Map<Player, Integer> pointsBefore = new HashMap<>();
+        for (Match m : matches) {
+            if (m.getRound() <= 0) continue;
+            pointsBefore.put(m.getFirstPlayer(), m.getPointsBefore(m.getFirstPlayer()));
+            if (m.getSecondPlayer() != null) pointsBefore.put(m.getSecondPlayer(), m.getPointsBefore(m.getSecondPlayer()));
+        }
         allMatches.removeIf(currentRound::contains);
         matches.clear();
 
@@ -1007,7 +1061,12 @@ public class PairingEngine {
         matches.addAll(byeMatches);
         allMatches.addAll(byeMatches);
         byeList = new HashSet<>(getPlayersWithBye(allMatches));
-        stampPairingInfo();
+        for (Match m : matches) {
+            Player a = m.getFirstPlayer();
+            Player b = m.getSecondPlayer();
+            m.setPairingInfo(pairedRound, pointsBefore.getOrDefault(a, a.getPoints()),
+                    b == null ? 0 : pointsBefore.getOrDefault(b, b.getPoints()));
+        }
 
         return formatMatchesAsText(matches);
     }

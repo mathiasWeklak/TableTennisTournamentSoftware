@@ -266,6 +266,18 @@ public class Match implements Serializable {
     }
 
     /**
+     * Returns the points a player had before this match's round, as stored at the pairing.
+     *
+     * @param player one of the two players
+     * @return the points before the round; 0 if unknown or not a player of this match
+     */
+    public int getPointsBefore(Player player) {
+        if (firstPlayer.equals(player)) return firstPointsBefore;
+        if (secondPlayer != null && secondPlayer.equals(player)) return secondPointsBefore;
+        return 0;
+    }
+
+    /**
      * Returns the round in which the match was paired.
      *
      * @return the round number, or 0 if unknown (files saved by older versions)

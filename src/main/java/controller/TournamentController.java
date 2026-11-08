@@ -54,6 +54,8 @@ public class TournamentController {
                         + "Bitte zuerst alle Teilnehmer entfernen, um den Modus zu wechseln.");
             }
             view.getAddPlayerButton().setText(doubles() ? "+ Doppel hinzufügen" : "+ Spieler hinzufügen");
+            view.getEditPlayerButton().setText(doubles() ? "Doppel bearbeiten" : "Spieler bearbeiten");
+            view.getRemovePlayerButton().setText(doubles() ? "Doppel entfernen" : "Spieler entfernen");
         });
         view.getLoadMenuItem().addActionListener(_ -> loadTournamentFromFile());
 
@@ -167,6 +169,10 @@ public class TournamentController {
         if (bestNext < 0) return "Die Zahl der besten Nächstplatzierten darf nicht negativ sein.";
         List<List<Player>> groups = GroupKnockout.assignGroups(dummies(participants), groupSize);
         int smallest = groups.stream().mapToInt(List::size).min().orElse(0);
+        if (smallest < 2) {
+            return "Mit Gruppengröße " + groupSize + " entsteht eine Gruppe mit nur einem Teilnehmer.\n"
+                    + "Bitte die Gruppengröße ändern.";
+        }
         if (perGroup >= smallest) {
             return "In der kleinsten Gruppe sind nur " + smallest + " Teilnehmer.\n"
                     + "Es müssen weniger als " + smallest + " je Gruppe weiterkommen.";
@@ -249,7 +255,19 @@ public class TournamentController {
             }
             groupKo = new GroupKoState(groupSize, perGroup, bestNext, view.getThirdPlaceBox().isSelected());
         }
-        new TournamentRound(playerList, tournamentName, tableCount, mode, plannedRounds, doubles(), groupKo).setVisible(true);
+        File existing = TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), tournamentName);
+        if (existing.exists() && JOptionPane.showConfirmDialog(view,
+                "Unter dem Namen „" + tournamentName + "“ ist bereits ein Turnier gespeichert:\n"
+                        + existing.getAbsolutePath() + "\n\n"
+                        + "Ein neues Turnier ersetzt diesen Stand, auch die alten Rundensicherungen\n"
+                        + "(„…_Runde_N.ser“) werden nach und nach überschrieben. Um das gespeicherte Turnier fortzusetzen,\n"
+                        + "bitte „Datei → Turnier laden“ wählen.\n\nTrotzdem ein neues Turnier beginnen?",
+                "Turnier schon vorhanden", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION) {
+            return;
+        }
+        TournamentRound round = new TournamentRound(playerList, tournamentName, tableCount, mode, plannedRounds, doubles(), groupKo);
+        round.saveTournamentState(); // the first draw is saved right away
+        round.setVisible(true);
         view.dispose();
     }
 
@@ -290,7 +308,12 @@ public class TournamentController {
      * an error dialog is shown to the user.</p>
      */
     private void loadTournamentFromFile() {
-        JFileChooser fileChooser = new JFileChooser();
+        if (!playerList.isEmpty() && JOptionPane.showConfirmDialog(view,
+                "Die eingetragenen Teilnehmer werden verworfen, wenn ein gespeichertes Turnier geladen wird.\n\nTrotzdem laden?",
+                "Turnier laden", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION) {
+            return;
+        }
+        JFileChooser fileChooser = new JFileChooser(TournamentStorage.defaultSaveDirectory());
         fileChooser.setFileFilter(new FileNameExtensionFilter("Turnier-Dateien (*.ser)", "ser"));
         fileChooser.setDialogTitle("Turnierstand laden");
 
@@ -301,6 +324,7 @@ public class TournamentController {
 
             try {
                 TournamentState state = TournamentStorage.load(file);
+                if (!confirmReplacingCurrentState(file, state)) return;
 
                 TournamentRound round = TournamentRound.fromSavedState(state);
                 round.setVisible(true);
@@ -312,5 +336,28 @@ public class TournamentController {
                         "Fehler", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+
+    /**
+     * A loaded tournament is continued in "&lt;name&gt;.ser" in the save directory. If another file
+     * was loaded (a round backup or a file from elsewhere) and that file already exists, the user
+     * is asked first, because the next save replaces it.
+     *
+     * @param loaded the loaded file
+     * @param state  the loaded state
+     * @return {@code true} if loading may continue
+     */
+    private boolean confirmReplacingCurrentState(File loaded, TournamentState state) {
+        File target = TournamentStorage.currentFile(TournamentStorage.defaultSaveDirectory(), state.tournamentName());
+        if (!target.exists() || TournamentStorage.isSameFile(loaded, target)) return true;
+        String saved = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+                .format(java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(target.lastModified()),
+                        java.time.ZoneId.systemDefault()));
+        return JOptionPane.showConfirmDialog(view,
+                "Geladen wird: " + loaded.getName() + "\n"
+                        + "Weitergespielt und gespeichert wird in:\n" + target.getAbsolutePath() + "\n\n"
+                        + "Dort liegt bereits ein Turnierstand (gespeichert am " + saved + ").\n"
+                        + "Er wird beim nächsten Speichern durch den geladenen Stand ersetzt.\n\nTrotzdem laden?",
+                "Turnierstand ersetzen?", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
     }
 }

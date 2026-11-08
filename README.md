@@ -13,17 +13,17 @@ Sie unterstützt das **Schweizer System**, den Modus **„Jeder gegen Jeden“**
 
 ## ✨ Funktionen
 
-- 💾 **Automatisches Speichern** nach jeder Ergebniseingabe, Setzungsänderung und Runde sowie beim Schließen
+- 💾 **Automatisches Speichern** gleich nach der ersten Auslosung, nach jeder Ergebniseingabe, Setzungsänderung und Runde sowie beim Schließen
 - 🔁 **Fortsetzen unterbrochener Turniere** durch Laden gespeicherter `.ser`-Dateien
 - 🏆 **Vorrunde in Gruppen + KO-Runde** mit Turnierbaum (Anzeige und Druck); Spiel um Platz 3 wahlweise
 - 👫 **Doppelkonkurrenzen**: Teilnehmer sind Paare; Setzung nach der Summe beider TTR-Werte, jede Person nur in einem Doppel
 - 👥 **Spielerverwaltung**: Hinzufügen, Bearbeiten (auch per Doppelklick), Entfernen mit Rückfrage; gleiche Vor- und Nachnamen werden abgelehnt
 - 🎲 **Setzliste**: nach TTR; bei gleichem oder fehlendem TTR entscheidet das Los
 - 📋 **Turnierablauf**: Auslosung mit Rückfrage, „Auslosung zurücknehmen“ solange noch kein Ergebnis erfasst ist, optionale Rundenzahl im Schweizer System
-- 🚪 **Spieler zurückziehen** (beide Modi) und **Spieler nachmelden** (Schweizer System)
+- 🚪 **Spieler zurückziehen** (alle Turnierformen) und **Spieler nachmelden** (Schweizer System, nicht mehr in der letzten geplanten Runde)
 - 🪑 **Automatische Tischzuweisung** für jede Begegnung
-- 🧮 **Ergebniseingabe**: satzweise mit Prüfung der Tischtennisregeln, Statusanzeige pro Spiel, Tastaturbedienung (Enter, Strg+S, Esc), „Kampflos“-Schaltflächen, Korrektur früherer Runden
-- 🖨️ **Drucken**: Rangliste bzw. Gruppentabellen, Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde)
+- 🧮 **Ergebniseingabe**: satzweise mit Prüfung der Tischtennisregeln, Statusanzeige pro Spiel, Tastaturbedienung (Enter, Strg+S, Esc), „Kampflos“-Schaltflächen, Korrektur früherer Runden (ein KO-Ergebnis kann den Sieger nicht mehr ändern, sobald die nächste KO-Runde ausgelost ist)
+- 🖨️ **Drucken**: Rangliste bzw. Gruppentabellen (nach Turnierende mit Endplatzierung), Kreuztabelle (kompakt) und Schiedsrichterzettel (6 pro Seite, mit Turniername und Runde bzw. Gruppe oder KO-Runde; lange Namen und Doppel zweizeilig)
 - 🛠️ **Manuelle Anpassung der Setzung** (nur im Schweizer System)
 - ⚠️ **Fehlerdialog** bei unerwarteten Fehlern, Details in `Turniersoftware-Fehler.log`
 
@@ -50,8 +50,9 @@ Bei ungerader Spielerzahl erhält der niedrigstplatzierte Spieler ohne bisherige
 - **Vorrunde:** Jeder gegen Jeden in jeder Gruppe, alle Gruppen spielen parallel; Platzierung mit direktem Vergleich nach ITTF
 - **Gruppentabellen:** statt einer Rangliste eine Tabelle je Gruppe wie auf dem Papierbogen: Nr., Name, Ergebnis gegen jeden Gruppengegner, Spiele, Sätze, Bälle, Punkte, Platz; Weiterkommende sind grün markiert (während der Vorrunde vorläufig); „Tabelle drucken“ druckt die Gruppentabellen
 - **Beste Nächstplatzierte:** Vergleich über die Gruppen nach Punkten pro Spiel, dann Satz- und Balldifferenz pro Spiel, dann TTR
-- **Turnierbaum:** Gruppensieger vor Gruppenzweiten vor den übrigen Weiterkommenden, jeweils nach TTR; Freilose für die Bestgesetzten; Teilnehmer derselben Gruppe treffen möglichst spät aufeinander
-- **KO-Runde:** Best of 5; mit Spiel um Platz 3 Endplatzierung 1–4, ohne teilen sich beide Halbfinal-Verlierer Platz 3; danach geteilte Plätze 5, 9, …; zieht sich ein Teilnehmer zurück, kommt sein Gegner kampflos weiter
+- **Turnierbaum:** Gruppensieger vor Gruppenzweiten vor den übrigen Weiterkommenden, jeweils nach TTR; Freilose immer für die Bestgesetzten; Teilnehmer derselben Gruppe treffen möglichst spät aufeinander
+- **KO-Runde:** Best of 5; mit Spiel um Platz 3 Endplatzierung 1–4, ohne teilen sich beide Halbfinal-Verlierer Platz 3; danach geteilte Plätze 5, 9, …
+- **Rückzug:** in der Vorrunde werden alle Gruppenspiele gestrichen (die Gegner sind in den restlichen Runden spielfrei); in der KO-Runde bleiben die Gruppenergebnisse bestehen und der Gegner kommt kampflos weiter (auch im Finale und im Spiel um Platz 3). Eine Runde, in der nach einem Rückzug nur noch Freilose übrig sind, wird trotzdem angelegt; das Turnier läuft danach normal weiter. Wer in der KO-Runde zurückzieht, verliert sein nächstes Spiel kampflos und erhält die Platzierung dieser Runde (z. B. Zweiter bei Rückzug vor dem Finale, Vierter bei Rückzug vor dem Spiel um Platz 3), egal ob das Spiel schon ausgelost war. Bleibt nach Rückzügen nur ein Qualifizierter übrig, gewinnt er das Finale kampflos. Ein Rückzug in der KO-Phase bleibt als solcher gespeichert, auch wenn die KO-Auslosung danach zurückgenommen wird
 
 ---
 
@@ -79,6 +80,8 @@ Spieler, die in allen Kriterien gleich sind, teilen sich den Rang (z. B. 1, 2, 2
 - `<Turniername>.ser` enthält immer den aktuellen Stand
 - `<Turniername>_Runde_N.ser` ist eine Sicherung des Stands nach abgeschlossener Runde N
 - Über den Menüpunkt **„Turnier laden“** kann eine gespeicherte Datei geöffnet und fortgesetzt werden
+- Ein geladenes Turnier wird in `<Turniername>.ser` im Speicherordner fortgeschrieben. Wird eine andere Datei geladen (z. B. eine Rundensicherung) und gibt es diesen Stand schon, fragt das Programm vorher nach
+- Ein neues Turnier mit dem Namen eines schon gespeicherten Turniers beginnt erst nach Rückfrage
 
 ---
 

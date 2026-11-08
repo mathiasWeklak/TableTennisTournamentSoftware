@@ -42,7 +42,7 @@ public class GroupTablesTest {
         calc.calculate(all);
         List<Match> counting = ScoreCalculator.countingMatches(matches, TournamentMode.GROUPS_KO, withdrawn);
         GroupKoState state = new GroupKoState(3, 1, 0).withGroupsAndBracket(groups, new ArrayList<>());
-        return GroupTables.build(state, counting, withdrawn, qualified, false);
+        return GroupTables.build(state, counting, withdrawn, withdrawn, qualified, false);
     }
 
     @Test
@@ -105,6 +105,8 @@ public class GroupTablesTest {
         Object[] rowC = t.rows().get(2);
         assertTrue(((String) rowC[1]).endsWith("zurückgezogen"));
         assertEquals("–", rowC[9]);
+        assertEquals("1.", t.rows().get(0)[9]);
+        assertEquals("2.", t.rows().get(1)[9], "Platz ohne den Zurückgezogenen");
         assertEquals("", rowC[2]);
         assertEquals("", t.rows().get(0)[4], "Spiel gegen den Zurückgezogenen gestrichen");
         assertArrayEquals(new boolean[]{false, false, true}, t.withdrawn());
@@ -153,5 +155,12 @@ public class GroupTablesTest {
             assertTrue(pages < 10);
         }
         assertTrue(pages >= 1);
+
+        // with final placing: one more box, still printable
+        List<Object[]> placing = List.of(new Object[]{"1.", "X0 X", "TTC"}, new Object[]{"2.", "X1 X", "TTC"});
+        Printable withPlacing = GroupTablesPanel.printable(tables, placing, "Gruppen: Test (Endstand)");
+        Graphics2D g = img.createGraphics();
+        assertEquals(Printable.PAGE_EXISTS, withPlacing.print(g, pf, 0));
+        g.dispose();
     }
 }

@@ -274,13 +274,13 @@ public class ResultEntryView extends JDialog {
         gridPanel.add(new JLabel(""), gbc);
 
         gbc.gridx = 1; gbc.weightx = 0.35;
-        JLabel p1Header = new JLabel(match.getFirstPlayer().getFullName(), SwingConstants.CENTER);
+        JLabel p1Header = new JLabel(headerText(match.getFirstPlayer()), SwingConstants.CENTER);
         p1Header.setFont(UITheme.FONT_SUBTITLE);
         p1Header.setForeground(UITheme.PRIMARY);
         gridPanel.add(p1Header, gbc);
 
         gbc.gridx = 2; gbc.weightx = 0.35;
-        JLabel p2Header = new JLabel(match.getSecondPlayer().getFullName(), SwingConstants.CENTER);
+        JLabel p2Header = new JLabel(headerText(match.getSecondPlayer()), SwingConstants.CENTER);
         p2Header.setFont(UITheme.FONT_SUBTITLE);
         p2Header.setForeground(UITheme.PRIMARY);
         gridPanel.add(p2Header, gbc);
@@ -380,6 +380,23 @@ public class ResultEntryView extends JDialog {
                 new ResultEntryController.MatchPanelData(setResultsFields, wonSetsField, lostSetsField, match));
 
         return matchPanel;
+    }
+
+    /**
+     * Column header for a participant: the name, for a pair both names on two lines.
+     *
+     * @param player the participant
+     * @return the label text
+     */
+    static String headerText(Player player) {
+        if (!player.isDoubles()) return player.getFullName();
+        StringBuilder sb = new StringBuilder("<html><div style='text-align:center'>");
+        List<String> names = player.getPersonNames();
+        for (int i = 0; i < names.size(); i++) {
+            if (i > 0) sb.append("<br>");
+            sb.append(names.get(i).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"));
+        }
+        return sb.append("</div></html>").toString();
     }
 
     /**

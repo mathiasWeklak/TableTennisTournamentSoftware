@@ -18,12 +18,37 @@ import java.util.List;
  * @param noThirdPlaceMatch  {@code true}: no match for third place, both semi-final losers share
  *                           place 3. Stored negated, so files of older versions (field missing =
  *                           {@code false}) keep the match for third place.
+ * @param knockoutWithdrawn  participants who withdrew in the knockout stage; their group results
+ *                           keep counting (also after the knockout draw is taken back). Empty in
+ *                           files of older versions.
  */
 public record GroupKoState(int groupSize, int qualifiersPerGroup, int bestNextPlaced,
                            List<List<Player>> groups, List<Player> bracket,
-                           boolean noThirdPlaceMatch) implements Serializable {
+                           boolean noThirdPlaceMatch, List<Player> knockoutWithdrawn) implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
+
+    /**
+     * Canonical constructor; a missing list (files of older versions) becomes an empty list.
+     */
+    public GroupKoState {
+        if (knockoutWithdrawn == null) knockoutWithdrawn = new ArrayList<>();
+    }
+
+    /**
+     * Creates a state without knockout withdrawals.
+     *
+     * @param groupSize          maximum participants per group
+     * @param qualifiersPerGroup qualifiers per group
+     * @param bestNextPlaced     best participants on the next place
+     * @param groups             the groups
+     * @param bracket            the bracket
+     * @param noThirdPlaceMatch  {@code true} without match for third place
+     */
+    public GroupKoState(int groupSize, int qualifiersPerGroup, int bestNextPlaced,
+                        List<List<Player>> groups, List<Player> bracket, boolean noThirdPlaceMatch) {
+        this(groupSize, qualifiersPerGroup, bestNextPlaced, groups, bracket, noThirdPlaceMatch, new ArrayList<>());
+    }
 
     /**
      * Creates a configuration with match for third place, without groups and bracket.
@@ -79,7 +104,8 @@ public record GroupKoState(int groupSize, int qualifiersPerGroup, int bestNextPl
      * @return the new state
      */
     public GroupKoState withGroupsAndBracket(List<List<Player>> newGroups, List<Player> newBracket) {
-        return new GroupKoState(groupSize, qualifiersPerGroup, bestNextPlaced, newGroups, newBracket, noThirdPlaceMatch);
+        return new GroupKoState(groupSize, qualifiersPerGroup, bestNextPlaced, newGroups, newBracket, noThirdPlaceMatch,
+                new ArrayList<>(knockoutWithdrawn));
     }
 
     /**

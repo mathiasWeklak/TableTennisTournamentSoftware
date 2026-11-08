@@ -74,6 +74,21 @@ public final class TournamentStorage {
     }
 
     /**
+     * Returns {@code true} if both files denote the same file on disk.
+     *
+     * @param a a file
+     * @param b another file
+     * @return {@code true} for the same file
+     */
+    public static boolean isSameFile(File a, File b) {
+        try {
+            return a.getCanonicalFile().equals(b.getCanonicalFile());
+        } catch (IOException e) {
+            return a.getAbsoluteFile().equals(b.getAbsoluteFile());
+        }
+    }
+
+    /**
      * Returns the backup file for the state after a completed round.
      *
      * @param directory      the target directory

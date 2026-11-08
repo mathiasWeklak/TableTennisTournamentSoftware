@@ -28,7 +28,7 @@ public final class GroupTables {
      * @param columns   the column names
      * @param rows      the cell values, one array per participant in group order
      * @param qualified per row: reaches the knockout stage
-     * @param withdrawn per row: withdrawn, group matches struck
+     * @param withdrawn per row: withdrawn (shown greyed)
      */
     public record Table(String title, String[] columns, List<Object[]> rows, boolean[] qualified, boolean[] withdrawn) {
 
@@ -73,27 +73,32 @@ public final class GroupTables {
      *
      * @param groupKo   groups and settings
      * @param counting  the counting matches (without struck matches)
-     * @param withdrawn withdrawn participants; they keep their row but get no place
+     * @param struck    participants whose group matches are struck (withdrawn during the group
+     *                  stage); they keep their row but get no place and no results
+     * @param withdrawn all withdrawn participants; marked in the name
      * @param qualified participants who reach (or currently would reach) the knockout stage
      * @param compact   {@code true}: short names (printing)
      * @return one table per group
      */
-    public static List<Table> build(GroupKoState groupKo, List<Match> counting, Set<Player> withdrawn,
-                                    Set<Player> qualified, boolean compact) {
+    public static List<Table> build(GroupKoState groupKo, List<Match> counting, Set<Player> struck,
+                                    Set<Player> withdrawn, Set<Player> qualified, boolean compact) {
         List<Table> tables = new ArrayList<>();
         for (int g = 0; g < groupKo.groups().size(); g++) {
             List<Player> group = groupKo.groups().get(g);
             Map<Player, Integer> rank = new HashMap<>();
-            for (Standings.Entry e : Standings.compute(group, TournamentMode.ROUND_ROBIN, counting)) {
+            // struck participants: ranks without them
+            for (Standings.Entry e : Standings.computeWithout(group, TournamentMode.ROUND_ROBIN, counting, struck)) {
                 rank.put(e.player(), e.rank());
             }
-            tables.add(table("Gruppe " + GroupKoState.groupName(g + 1), group, rank, counting, withdrawn, qualified, compact));
+            tables.add(table("Gruppe " + GroupKoState.groupName(g + 1), group, rank, counting, struck, withdrawn,
+                    qualified, compact));
         }
         return tables;
     }
 
     private static Table table(String title, List<Player> group, Map<Player, Integer> rank, List<Match> counting,
-                               Set<Player> withdrawn, Set<Player> qualified, boolean compact) {
+                               Set<Player> struck, Set<Player> withdrawn, Set<Player> qualified, boolean compact) {
+        Map<Player, String> shortNames = Player.uniqueShortNames(group);
         int n = group.size();
         String[] columns = new String[n + 7];
         columns[0] = "Nr.";
@@ -110,15 +115,15 @@ public final class GroupTables {
         boolean[] w = new boolean[n];
         for (int i = 0; i < n; i++) {
             Player p = group.get(i);
-            boolean out = withdrawn.contains(p);
-            w[i] = out;
+            boolean out = struck.contains(p);
+            w[i] = withdrawn.contains(p);
             q[i] = !out && qualified.contains(p);
             Object[] row = new Object[columns.length];
             row[0] = i + 1;
-            String name = compact ? p.getShortName() : p.getFullName() + " (" + p.getClub() + ")";
-            row[1] = name + (out ? " – zurückgezogen" : "");
+            String name = compact ? shortNames.get(p) : p.getFullName() + " (" + p.getClub() + ")";
+            row[1] = name + (w[i] ? (out ? " – zurückgezogen" : " – in der KO-Runde zurückgezogen") : "");
             for (int j = 0; j < n; j++) {
-                row[FIRST_RESULT_COLUMN + j] = i == j || out || withdrawn.contains(group.get(j))
+                row[FIRST_RESULT_COLUMN + j] = i == j || out || struck.contains(group.get(j))
                         ? "" : CrossTableController.resultFor(counting, p, group.get(j));
             }
             row[n + 2] = p.getWins() + ":" + p.getLosses();

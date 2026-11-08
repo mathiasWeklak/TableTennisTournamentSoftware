@@ -221,6 +221,14 @@ public class TournamentRoundView extends JFrame {
     }
 
     /**
+     * Switches the button labels to doubles ("Doppel zurückziehen", "Doppel nachmelden").
+     */
+    public void useDoublesLabels() {
+        withdrawPlayerButton.setText("Doppel zurückziehen");
+        if (addPlayerButton != null) addPlayerButton.setText("Doppel nachmelden");
+    }
+
+    /**
      * Returns the group tables shown instead of the ranking in a group/knockout tournament.
      *
      * @return the group tables panel, or {@code null} in the other formats

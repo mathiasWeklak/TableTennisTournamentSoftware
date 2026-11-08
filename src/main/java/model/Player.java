@@ -123,6 +123,50 @@ public class Player implements Serializable {
     }
 
     /**
+     * Returns the names of the persons: one name for a single player, two for a pair.
+     *
+     * @return the full names, e.g. ["Anna Becker", "Lena Krause"]
+     */
+    public java.util.List<String> getPersonNames() {
+        String own = firstName + " " + lastName;
+        return isDoubles() ? java.util.List.of(own, partnerFirstName + " " + partnerLastName) : java.util.List.of(own);
+    }
+
+    /**
+     * Returns short names that are unique within the given participants: normally the last name
+     * ({@link #getShortName()}); if two participants share it, the first name initial is added
+     * ("A. Müller", for a pair "A. Becker/L. Krause"); if that is still ambiguous, the full name.
+     *
+     * @param players the participants shown together, e.g. one group
+     * @return the short name of every participant
+     */
+    public static java.util.Map<Player, String> uniqueShortNames(java.util.Collection<Player> players) {
+        java.util.Map<String, Integer> count = new java.util.HashMap<>();
+        java.util.Map<String, Integer> countInitials = new java.util.HashMap<>();
+        for (Player p : players) {
+            count.merge(p.getShortName(), 1, Integer::sum);
+            countInitials.merge(p.initialName(), 1, Integer::sum);
+        }
+        java.util.Map<Player, String> result = new java.util.HashMap<>();
+        for (Player p : players) {
+            String name = p.getShortName();
+            if (count.get(name) > 1) {
+                name = countInitials.get(p.initialName()) > 1 ? p.getFullName().replace(" / ", "/") : p.initialName();
+            }
+            result.put(p, name);
+        }
+        return result;
+    }
+
+    private String initialName() {
+        return initial(firstName) + lastName + (isDoubles() ? "/" + initial(partnerFirstName) + partnerLastName : "");
+    }
+
+    private static String initial(String name) {
+        return name == null || name.isBlank() ? "" : name.strip().charAt(0) + ". ";
+    }
+
+    /**
      * Returns the club of the first person (for a single player: the club).
      *
      * @return the own club

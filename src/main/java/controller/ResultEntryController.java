@@ -3,6 +3,7 @@ package controller;
 import static model.Match.MAX_SETS;
 
 import model.Match;
+import model.Player;
 import model.ResultRules;
 import view.ResultEntryView;
 
@@ -64,8 +65,15 @@ public class ResultEntryController {
      */
     public void saveResults(boolean showConfirmation) {
         List<String> problems = new ArrayList<>();
+        List<String> blocked = new ArrayList<>();
         for (MatchPanelData data : view.getMatchPanelData()) {
             String[][] sets = readSets(data.setResultsFields());
+            if (changesDrawnWinner(data.match(), sets, tournamentRound.getCurrentRound())) {
+                // the winner is already drawn into the next knockout round: keep the stored result
+                blocked.add(data.match().getFirstPlayer().getFullName() + " – " + data.match().getSecondPlayer().getFullName());
+                restoreFields(data);
+                continue;
+            }
             IntStream.range(0, MAX_SETS).forEach(i -> data.match().setResults(i, sets[i]));
             data.match().setOverallResult(ResultRules.overallResult(sets));
 
@@ -78,6 +86,13 @@ public class ResultEntryController {
         tournamentRound.updateResultsTable();
         tournamentRound.saveTournamentState();
 
+        if (!blocked.isEmpty()) {
+            JOptionPane.showMessageDialog(view,
+                    "Diese Ergebnisse wurden nicht geändert, weil der Sieger schon in der nächsten KO-Runde steht:\n\n"
+                            + String.join("\n", blocked)
+                            + "\n\nUm den Sieger zu ändern, bitte zuerst die Auslosung der nächsten Runde zurücknehmen.",
+                    "KO-Ergebnis gesperrt", JOptionPane.WARNING_MESSAGE);
+        }
         if (!problems.isEmpty()) {
             JOptionPane.showMessageDialog(view,
                     "Ergebnisse gespeichert, aber folgende Eingaben sind ungültig und werden nicht gewertet:\n\n"
@@ -85,6 +100,35 @@ public class ResultEntryController {
                     "Ungültige Satzergebnisse", JOptionPane.WARNING_MESSAGE);
         } else if (showConfirmation) {
             JOptionPane.showMessageDialog(view, "Ergebnisse gespeichert.");
+        }
+    }
+
+    /**
+     * Returns {@code true} if the entered sets would change the winner of a knockout match whose
+     * winner has already been drawn into a later round.
+     *
+     * @param match        the match
+     * @param sets         the entered sets
+     * @param currentRound the current round of the tournament
+     * @return {@code true} if the change must not be saved
+     */
+    static boolean changesDrawnWinner(Match match, String[][] sets, int currentRound) {
+        if (match.getKoRound() <= 0 || match.getRound() <= 0 || match.getRound() >= currentRound) return false;
+        Player newWinner = null;
+        if (ResultRules.isComplete(sets)) {
+            int[] won = ResultRules.countSets(sets);
+            newWinner = won[0] > won[1] ? match.getFirstPlayer() : match.getSecondPlayer();
+        }
+        return !java.util.Objects.equals(match.getWinner(), newWinner);
+    }
+
+    private static void restoreFields(MatchPanelData data) {
+        String[][] stored = data.match().getResults();
+        for (int i = 0; i < MAX_SETS; i++) {
+            for (int j = 0; j < 2; j++) {
+                String v = stored[i] == null || stored[i][j] == null ? "" : stored[i][j];
+                data.setResultsFields()[i][j].setText(v);
+            }
         }
     }
 
