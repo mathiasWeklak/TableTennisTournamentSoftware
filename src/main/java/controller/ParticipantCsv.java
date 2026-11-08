@@ -216,12 +216,25 @@ public final class ParticipantCsv {
     }
 
     /**
-     * Index of the column of a person with one of the names, -1 if missing. Every person has a
+     * Index of the column of a person with one of the names, -1 if missing. If only one of the
+     * names occurs, exactly once per person, its n-th column is taken. Otherwise every person has a
      * block of columns that starts at his "Vorname" column (the first block also contains the
      * columns before it); within the block the names count in the given order of priority, e.g.
      * "Nachname" before "Name", "TTR" before "Q-TTR", "Verein" before "Club".
      */
     private static int column(List<String> header, int person, int persons, String... names) {
+        // unambiguous: only one of the names is used, exactly once per person -> its n-th column
+        // (any order, e.g. "Nachname;Vorname" or all first names before all last names)
+        List<List<Integer>> found = new ArrayList<>();
+        for (String name : names) {
+            List<Integer> columns = new ArrayList<>();
+            for (int i = 0; i < header.size(); i++) {
+                if (key(header.get(i)).equals(name)) columns.add(i);
+            }
+            if (!columns.isEmpty()) found.add(columns);
+        }
+        if (found.size() == 1 && found.getFirst().size() == persons) return found.getFirst().get(person);
+        // otherwise (mixed names, a full-name column, ...): a block of columns per person
         List<Integer> starts = new ArrayList<>();
         for (int i = 0; i < header.size(); i++) {
             if (key(header.get(i)).equals("vorname")) starts.add(i);

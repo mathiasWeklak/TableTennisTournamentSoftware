@@ -268,6 +268,29 @@ public class FeaturesTest {
     }
 
     @Test
+    public void csv_doublesHeadersInOtherOrders() {
+        String row = "\n";
+        String[] headers = {
+                "Nachname;Vorname;Verein;TTR;Nachname;Vorname;Verein;TTR",
+                "Vorname 1;Vorname 2;Nachname 1;Nachname 2;Verein 1;Verein 2;TTR 1;TTR 2",
+                "Verein;Vorname;Nachname;TTR;Verein;Vorname;Nachname;TTR"};
+        String[] rows = {
+                "Becker;Anna;A;1500;Krause;Lena;B;1400",
+                "Anna;Lena;Becker;Krause;A;B;1500;1400",
+                "A;Anna;Becker;1500;B;Lena;Krause;1400"};
+        for (int i = 0; i < headers.length; i++) {
+            ParticipantCsv.ImportResult r = ParticipantCsv.parse(headers[i] + "\n" + rows[i] + row, true, List.of());
+            assertEquals(List.of(), r.errors(), headers[i]);
+            Player p = r.players().getFirst();
+            assertEquals("Anna Becker / Lena Krause", p.getFullName(), headers[i]);
+            assertEquals("A", p.getOwnClub(), headers[i]);
+            assertEquals("B", p.getPartnerClub(), headers[i]);
+            assertEquals(1500, p.getOwnTtr(), headers[i]);
+            assertEquals(1400, p.getPartnerTtr(), headers[i]);
+        }
+    }
+
+    @Test
     public void csv_singlesWithThreeExtraColumns() {
         ParticipantCsv.ImportResult r = ParticipantCsv.parse("Max;Mu;TTC;1500;m;Herren;2001\n", false, List.of());
         assertEquals(List.of(), r.errors());
