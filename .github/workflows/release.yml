@@ -42,24 +42,32 @@ jobs:
           java-version: "25"
           cache: gradle   # keeps the Gradle distribution between runs
 
-      - name: Make Gradle wrapper executable
-        if: runner.os != 'Windows'
-        run: chmod +x gradlew
-
-      # services.gradle.org is sometimes slow from the runners: download Gradle up front, with retries
-      - name: Download Gradle
+      # The Gradle wrapper does not retry a failed download (timeouts, HTTP 504 from the mirror).
+      # Gradle (same version as the wrapper) is therefore downloaded with curl, which retries with
+      # growing pauses, and put on the PATH; the steps below call "gradle".
+      - name: Install Gradle
         shell: bash
         run: |
-          for attempt in 1 2 3; do
-            ./gradlew --version --no-daemon && exit 0
-            echo "Gradle download failed (attempt $attempt), retrying in 20 s"
-            sleep 20
-          done
-          exit 1
+          url=$(grep '^distributionUrl=' gradle/wrapper/gradle-wrapper.properties | cut -d= -f2- | sed 's/\\:/:/g')
+          echo "Gradle: $url"
+          tmp="$RUNNER_TEMP"
+          if command -v cygpath >/dev/null; then tmp=$(cygpath -u "$RUNNER_TEMP"); fi   # Windows (Git Bash)
+          # without --retry-delay curl waits longer after every failed attempt (1 s, 2 s, 4 s, ...)
+          curl -fsSL --retry 8 --retry-all-errors --connect-timeout 30 -o "$tmp/gradle.zip" "$url"
+          mkdir -p "$tmp/gradle"
+          if command -v unzip >/dev/null; then
+            unzip -q "$tmp/gradle.zip" -d "$tmp/gradle"
+          else
+            7z x -y -o"$tmp/gradle" "$tmp/gradle.zip" > /dev/null
+          fi
+          home=$(ls -d "$tmp"/gradle/gradle-*)
+          chmod +x "$home/bin/gradle"
+          if command -v cygpath >/dev/null; then cygpath -w "$home/bin" >> "$GITHUB_PATH"; else echo "$home/bin" >> "$GITHUB_PATH"; fi
+          "$home/bin/gradle" --version --no-daemon
 
       - name: Run tests
         if: matrix.label == 'linux'
-        run: ./gradlew test --no-daemon
+        run: gradle test --no-daemon
 
       - name: Read version
         id: version
@@ -71,9 +79,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $PSNativeCommandUseErrorActionPreference = $true   # stop if gradlew fails
+          $PSNativeCommandUseErrorActionPreference = $true   # stop if gradle fails
           $ErrorActionPreference = 'Stop'
-          ./gradlew jpackage --no-daemon
+          gradle jpackage --no-daemon
           New-Item -ItemType Directory -Force out | Out-Null
           Compress-Archive -Path build/dist/TT-Turniersoftware -DestinationPath "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-windows-portable.zip"
 
@@ -84,7 +92,7 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           $ErrorActionPreference = 'Stop'
-          ./gradlew jpackage -PinstallerType=msi --no-daemon
+          gradle jpackage -PinstallerType=msi --no-daemon
           Copy-Item build/dist/*.msi "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-windows.msi"
 
       # ---------------- Linux: tar.gz + deb + rpm ----------------
@@ -93,11 +101,11 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y rpm fakeroot
           mkdir -p out
-          ./gradlew jpackage --no-daemon
+          gradle jpackage --no-daemon
           tar -C build/dist -czf "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-linux-x64.tar.gz" TT-Turniersoftware
-          ./gradlew jpackage -PinstallerType=deb --no-daemon
+          gradle jpackage -PinstallerType=deb --no-daemon
           cp build/dist/*.deb out/
-          ./gradlew jpackage -PinstallerType=rpm --no-daemon
+          gradle jpackage -PinstallerType=rpm --no-daemon
           cp build/dist/*.rpm out/
 
       # ---------------- macOS: dmg ----------------
@@ -105,7 +113,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           mkdir -p out
-          ./gradlew jpackage -PinstallerType=dmg --no-daemon
+          gradle jpackage -PinstallerType=dmg --no-daemon
           cp build/dist/*.dmg "out/TT-Turniersoftware-${{ steps.version.outputs.version }}-${{ matrix.label }}.dmg"
 
       - uses: actions/upload-artifact@v7.0.2
