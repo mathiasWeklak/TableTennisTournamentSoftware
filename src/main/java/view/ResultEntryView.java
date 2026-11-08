@@ -188,10 +188,7 @@ public class ResultEntryView extends JDialog {
     }
 
     /**
-     * Marks a tab as complete (check mark) or not.
-     *
-     * @param matchPanel the match panel
-     * @param complete   {@code true} if the entered result is a complete, valid match result
+     * Sets the tab titles again, e.g. after waiting matches got a table.
      */
     public void refreshTabTitles() {
         List<Player> inRound = new ArrayList<>();
@@ -212,10 +209,10 @@ public class ResultEntryView extends JDialog {
     }
 
     /**
-     * Marks a match tab as complete or not.
+     * Marks a tab as complete (check mark) or not.
      *
      * @param matchPanel the match panel
-     * @param complete   {@code true} if the match is decided
+     * @param complete   {@code true} if the entered result is a complete, valid match result
      */
     public void markTab(JPanel matchPanel, boolean complete) {
         int index = tabbedPane.indexOfComponent(matchPanel);

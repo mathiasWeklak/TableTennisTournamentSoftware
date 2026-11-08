@@ -70,6 +70,7 @@ public class ResultEntryController {
         boolean bracketMatchedQualifiers = tournamentRound.bracketMatchesQualifiers();
         List<Match> waiting = tournamentRound.getMatches().stream()
                 .filter(m -> m.getSecondPlayer() != null && m.getTableNumber() <= 0).toList();
+        List<Match> decidedBefore = view.getMatchPanelData().stream().map(MatchPanelData::match).filter(Match::isDecided).toList();
         for (MatchPanelData data : view.getMatchPanelData()) {
             String[][] sets = readSets(data.setResultsFields());
             if (changesDrawnWinner(data.match(), sets, tournamentRound.getCurrentRound())) {
@@ -120,7 +121,8 @@ public class ResultEntryController {
                             + "(möglich, solange dort noch kein Ergebnis eingetragen ist).",
                     "Weiterkommende geändert", JOptionPane.WARNING_MESSAGE);
         }
-        List<String> doubleTables = tournamentRound.tablesWithTwoOpenMatches();
+        List<Match> reopened = decidedBefore.stream().filter(m -> !m.isDecided()).toList();
+        List<String> doubleTables = reopened.isEmpty() ? List.of() : tournamentRound.tablesWithTwoOpenMatches(reopened);
         if (!doubleTables.isEmpty()) {
             JOptionPane.showMessageDialog(view,
                     "Ein Ergebnis wurde wieder geöffnet, sein Tisch ist inzwischen neu vergeben:\n\n"

@@ -400,7 +400,10 @@ public class TournamentRound {
         if (mode != TournamentMode.GROUPS_KO || groupKo == null || groupKo.bracket().isEmpty()) return false;
         // group standings as at the draw: only players withdrawn in the group stage are struck,
         // a withdrawal in the knockout stage does not move anybody up
-        Set<Player> struck = pairingEngine.annulledPlayers();
+        // also left out: withdrawn players who are not (any more) in the bracket, e.g. after the
+        // knockout draw was taken back and drawn again without them
+        Set<Player> struck = new HashSet<>(pairingEngine.annulledPlayers());
+        pairingEngine.getWithdrawn().stream().filter(p -> !groupKo.bracket().contains(p)).forEach(struck::add);
         List<List<Player>> ranked = new ArrayList<>();
         for (List<Player> group : groupKo.groups()) {
             ranked.add(Standings.computeWithout(group, TournamentMode.ROUND_ROBIN, countingMatches(), struck).stream()
@@ -414,12 +417,13 @@ public class TournamentRound {
     }
 
     /**
-     * Tables on which two open matches of the current round stand (a result was deleted after its
-     * table had been given to a waiting match).
+     * Tables on which two open matches of the current round stand because one of the given matches
+     * was opened again (its result deleted after the table had been given to a waiting match).
      *
+     * @param reopened matches whose result was just deleted
      * @return one line per table, e.g. "Tisch 1: A – B / C – D"
      */
-    List<String> tablesWithTwoOpenMatches() {
+    List<String> tablesWithTwoOpenMatches(Collection<Match> reopened) {
         Map<Integer, List<Match>> byTable = new TreeMap<>();
         Set<Player> struck = struckPlayers();
         for (Match m : pairingEngine.getMatches()) {
@@ -428,7 +432,7 @@ public class TournamentRound {
         }
         List<String> lines = new ArrayList<>();
         byTable.forEach((table, list) -> {
-            if (list.size() > 1) {
+            if (list.size() > 1 && list.stream().anyMatch(reopened::contains)) {
                 lines.add("Tisch " + table + ": " + String.join(" / ", list.stream()
                         .map(m -> m.getFirstPlayer().getFullName() + " – " + m.getSecondPlayer().getFullName()).toList()));
             }

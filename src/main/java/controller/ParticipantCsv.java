@@ -65,8 +65,9 @@ public final class ParticipantCsv {
         List<Player> players = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         String[] lines = text.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
+        // the separator comes from the first line with content; lines of separators only are skipped
         int first = 0;
-        while (first < lines.length && lines[first].isBlank()) first++;
+        while (first < lines.length && lines[first].replaceAll("[;,\t]", "").isBlank()) first++;
         if (first >= lines.length) return new ImportResult(players, List.of("Die Datei enthält keine Teilnehmer."));
         char separator = detectSeparator(lines[first]);
 
@@ -74,7 +75,7 @@ public final class ParticipantCsv {
         int[][] columns = new int[persons][];
         List<String> header = split(lines[first], separator);
         int start = first;
-        if (!doubles && (isHeader(header) ? column(header, 1, "vorname") >= 0 : header.size() >= 8)) {
+        if (!doubles && (isHeader(header) ? column(header, 1, "vorname") >= 0 : hasPartnerColumns(lines, first, separator))) {
             return new ImportResult(players, List.of("Die Datei enthält Doppel (zwei Personen je Zeile). "
                     + "Bitte zuerst „Doppel“ anhaken und dann importieren."));
         }
@@ -199,8 +200,28 @@ public final class ParticipantCsv {
                 .anyMatch(k -> k.equals("vorname") || k.equals("nachname") || k.equals("name"));
     }
 
-    /** Index of the n-th (person) column with one of the names (synonyms count together), -1 if missing. */
+    /** Without header: a doubles file has a first and last name of a second person in fields 5 and 6. */
+    private static boolean hasPartnerColumns(String[] lines, int first, char separator) {
+        for (int i = first; i < lines.length; i++) {
+            List<String> fields = split(lines[i], separator);
+            // names contain letters; extra columns like year of birth or licence number do not count
+            if (field(fields, 4).matches(".*\\p{L}.*") && field(fields, 5).matches(".*\\p{L}.*")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Index of the n-th (person) column with one of the names, -1 if missing: first the n-th
+     * column with the same name (e.g. "TTR" and "Q-TTR" both per person), otherwise the n-th
+     * column with any of the names (e.g. "Nachname" for the first and "Name" for the second person).
+     */
     private static int column(List<String> header, int person, String... names) {
+        for (String name : names) {
+            int seen = 0;
+            for (int i = 0; i < header.size(); i++) {
+                if (key(header.get(i)).equals(name) && seen++ == person) return i;
+            }
+        }
         int seen = 0;
         for (int i = 0; i < header.size(); i++) {
             String k = key(header.get(i));

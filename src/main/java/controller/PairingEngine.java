@@ -295,7 +295,6 @@ public class PairingEngine {
         matches.addAll(savedMatches);
         byeList = new HashSet<>(getPlayersWithBye(allMatches));
         pairedRound = allMatches.stream().mapToInt(Match::getRound).max().orElse(0);
-        queueSurplusMatches(); // files of older versions: tables given twice in the current round
     }
 
     /**
@@ -328,7 +327,6 @@ public class PairingEngine {
     private void queueSurplusMatches() {
         Set<Integer> given = new HashSet<>();
         for (Match m : matches) {
-            // open matches only (files of older versions gave tables cyclically, also to decided matches)
             if (m.getSecondPlayer() != null && !m.isDecided() && m.getTableNumber() > 0 && !given.add(m.getTableNumber())) {
                 m.setTable(0);
             }

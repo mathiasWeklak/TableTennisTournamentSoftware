@@ -223,20 +223,44 @@ public class FeaturesTest {
     }
 
     @Test
-    public void tableQueue_oldFilesWithCyclicTablesAreQueuedOnLoad() {
-        List<Player> ps = players(10);
+    public void tableQueue_loadingKeepsTheSavedTables() {
+        // a called match (table 1) and a reopened one on the same table: the running match keeps it
+        List<Player> ps = players(6);
         List<Match> round = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            Match m = new Match(ps.get(2 * i), ps.get(2 * i + 1), i % 3 + 1); // old style: 1,2,3,1,2
+        for (int i = 0; i < 3; i++) {
+            Match m = new Match(ps.get(2 * i), ps.get(2 * i + 1), 1);
             m.setPairingInfo(1, 0, 0);
             round.add(m);
         }
-        PairingEngine engine = new PairingEngine(ps, 3, TournamentMode.SWISS);
+        PairingEngine engine = new PairingEngine(ps, 1, TournamentMode.SWISS);
         engine.restoreState(round, round);
-        assertEquals(List.of(1, 2, 3, 0, 0), round.stream().map(Match::getTableNumber).toList());
-        win(round.get(2));
-        assertEquals(List.of(round.get(3)), engine.assignFreeTables());
-        assertEquals(3, round.get(3).getTableNumber());
+        assertEquals(List.of(1, 1, 1), round.stream().map(Match::getTableNumber).toList());
+        assertTrue(engine.assignFreeTables().isEmpty());
+    }
+
+    @Test
+    public void csv_singlesFileWithEmptyOrExtraColumnsIsNotTakenForDoubles() {
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse("Max;Muster;TTC;1500;;;;\nAnna;Becker;A;1400;;;;\n", false, List.of());
+        assertEquals(2, r.players().size());
+        ParticipantCsv.ImportResult extra = ParticipantCsv.parse("Max;Muster;TTC;1500;1990;12345;;\n", false, List.of());
+        assertEquals(1, extra.players().size(), "Zusatzspalten ohne Partnernamen");
+    }
+
+    @Test
+    public void csv_separatorLineBeforeHeader() {
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse(";;;\nVorname;Nachname;Verein;TTR\nAnna;Becker;A;1\n", false, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals(1, r.players().size());
+    }
+
+    @Test
+    public void csv_doublesWithTtrAndQttrPerPerson() {
+        String text = "Vorname;Nachname;Verein;TTR;Q-TTR;Vorname;Nachname;Verein;TTR;Q-TTR\n"
+                + "Anna;Becker;A;1000;1100;Lena;Krause;B;2000;2100\n";
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse(text, true, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals(1000, r.players().getFirst().getOwnTtr());
+        assertEquals(2000, r.players().getFirst().getPartnerTtr());
     }
 
     @Test
