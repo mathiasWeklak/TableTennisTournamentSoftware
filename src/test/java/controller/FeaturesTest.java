@@ -260,6 +260,28 @@ public class FeaturesTest {
     }
 
     @Test
+    public void csv_fullNameColumnBeforeTheBlocks() {
+        String text = "Name;Vorname;Nachname;Verein;Vorname;Name;Verein\nANNA BECKER;Anna;Becker;A;Lena;Krause;B\n";
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse(text, true, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals("Anna Becker / Lena Krause", r.players().getFirst().getFullName());
+    }
+
+    @Test
+    public void csv_singlesWithThreeExtraColumns() {
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse("Max;Mu;TTC;1500;m;Herren;2001\n", false, List.of());
+        assertEquals(List.of(), r.errors());
+        assertEquals(1, r.players().size());
+    }
+
+    @Test
+    public void csv_doublesWithoutPartnerClubIsStillRecognized() {
+        ParticipantCsv.ImportResult r = ParticipantCsv.parse("A;B;C;1500;D;E;;1400\n", false, List.of());
+        assertTrue(r.players().isEmpty());
+        assertTrue(r.errors().getFirst().contains("Doppel"), r.errors().getFirst());
+    }
+
+    @Test
     public void csv_singlesWithTwoTextColumnsIsNotTakenForDoubles() {
         ParticipantCsv.ImportResult r = ParticipantCsv.parse("Max;Muster;TTC;1500;m;Herren\n", false, List.of());
         assertEquals(List.of(), r.errors());

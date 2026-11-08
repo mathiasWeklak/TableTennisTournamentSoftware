@@ -52,8 +52,9 @@ jobs:
           echo "Gradle: $url"
           tmp="$RUNNER_TEMP"
           if command -v cygpath >/dev/null; then tmp=$(cygpath -u "$RUNNER_TEMP"); fi   # Windows (Git Bash)
-          # without --retry-delay curl waits longer after every failed attempt (1 s, 2 s, 4 s, ...)
-          curl -fsSL --retry 8 --retry-all-errors --connect-timeout 30 -o "$tmp/gradle.zip" "$url"
+          # without --retry-delay curl waits longer after every failed attempt (1 s, 2 s, 4 s, ...);
+          # --max-time ends a stalled download, which is then retried as well
+          curl -fsSL --retry 8 --retry-all-errors --connect-timeout 30 --max-time 300 -o "$tmp/gradle.zip" "$url"
           mkdir -p "$tmp/gradle"
           if command -v unzip >/dev/null; then
             unzip -q "$tmp/gradle.zip" -d "$tmp/gradle"

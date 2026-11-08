@@ -200,44 +200,38 @@ public final class ParticipantCsv {
                 .anyMatch(k -> k.equals("vorname") || k.equals("nachname") || k.equals("name"));
     }
 
-    /** Without header: a doubles file has first name, last name and club of a second person in fields 5 to 7. */
+    /** Without header: a doubles file has a second person in fields 5 to 8 (see the rules inside). */
     private static boolean hasPartnerColumns(String[] lines, int first, char separator) {
         for (int i = first; i < lines.length; i++) {
             List<String> fields = split(lines[i], separator);
-            // names contain letters and the partner has a club; extra columns like year of birth,
-            // licence number, sex or age class do not count
-            if (field(fields, 4).matches(".*\\p{L}.*") && field(fields, 5).matches(".*\\p{L}.*")
-                    && !field(fields, 6).isEmpty()) {
-                return true;
-            }
+            // a partner has a first and last name with letters and then either a TTR (a number) in
+            // field 8 or a club with letters in field 7; extra columns like sex, age class or
+            // year of birth (e.g. "m;Herren;2001") do not count
+            boolean names = field(fields, 4).matches(".*\\p{L}.*") && field(fields, 5).matches(".*\\p{L}.*");
+            boolean ttr = field(fields, 7).matches("[\\d. ]+");
+            boolean club = field(fields, 6).matches(".*\\p{L}.*") && field(fields, 7).isEmpty();
+            if (names && (ttr || club)) return true;
         }
         return false;
     }
 
     /**
-     * Index of the column of a person with one of the names, -1 if missing: a name that occurs for
-     * every person is counted on its own (e.g. "TTR" and "Q-TTR" both per person), otherwise the
-     * n-th column with any of the names (e.g. "Name" for the first and "Nachname" for the second
-     * person, or "Q-TTR" and "TTR").
+     * Index of the column of a person with one of the names, -1 if missing. Every person has a
+     * block of columns that starts at his "Vorname" column (the first block also contains the
+     * columns before it); within the block the names count in the given order of priority, e.g.
+     * "Nachname" before "Name", "TTR" before "Q-TTR", "Verein" before "Club".
      */
     private static int column(List<String> header, int person, int persons, String... names) {
-        // a name that occurs once per person (e.g. "TTR" and "Q-TTR" for both) is counted on its own
-        for (String name : names) {
-            List<Integer> found = new ArrayList<>();
-            for (int i = 0; i < header.size(); i++) {
-                if (key(header.get(i)).equals(name)) found.add(i);
-            }
-            if (found.size() >= persons && person < found.size()) return found.get(person);
-        }
-        // otherwise the synonyms count together (e.g. "Name" for the first, "Nachname" for the second person)
-        int seen = 0;
+        List<Integer> starts = new ArrayList<>();
         for (int i = 0; i < header.size(); i++) {
-            String k = key(header.get(i));
-            for (String name : names) {
-                if (k.equals(name)) {
-                    if (seen++ == person) return i;
-                    break;
-                }
+            if (key(header.get(i)).equals("vorname")) starts.add(i);
+        }
+        if (person > 0 && person >= starts.size()) return -1;
+        int from = person == 0 ? 0 : starts.get(person);
+        int to = person + 1 < persons && person + 1 < starts.size() ? starts.get(person + 1) : header.size();
+        for (String name : names) {
+            for (int i = from; i < to; i++) {
+                if (key(header.get(i)).equals(name)) return i;
             }
         }
         return -1;
