@@ -183,7 +183,8 @@ public class TournamentController {
             return "Bei nur einer Gruppe gibt es keine besten Nächstplatzierten. Bitte 0 eintragen.";
         }
         if (bestNext >= groups.size()) {
-            return "Bei " + groups.size() + " Gruppen können höchstens " + (groups.size() - 1) + " Nächstplatzierte weiterkommen."
+            return "Bei " + groups.size() + " Gruppen " + (groups.size() == 2 ? "kann höchstens ein Nächstplatzierter"
+                    : "können höchstens " + (groups.size() - 1) + " Nächstplatzierte") + " weiterkommen."
                     + (perGroup + 1 < smallest ? "\nSollen alle weiterkommen, bitte stattdessen „weiter je Gruppe“ erhöhen." : "");
         }
         if (groups.size() * perGroup + bestNext < 2) {

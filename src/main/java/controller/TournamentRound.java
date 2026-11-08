@@ -576,6 +576,8 @@ public class TournamentRound {
                     ? "Alle Runden sind gespielt."
                     : mode == TournamentMode.GROUPS_KO
                     ? "Die KO-Runde ist beendet."
+                    : allActiveHadBye()
+                    ? "Alle verbleibenden Spieler hatten bereits ein Freilos; ein zweites Freilos ist nicht erlaubt."
                     : "Es ist keine weitere Runde ohne Wiederholungsbegegnung möglich.";
             finishTournament(reason + "\nDas Turnier ist nach " + rounds(currentRound) + " beendet.");
             return;
@@ -584,6 +586,13 @@ public class TournamentRound {
         closeRefereeSheets();
         updateResultsTable();
         saveTournamentState();
+    }
+
+    /** Swiss System with an odd field in which every active player already had a bye. */
+    private boolean allActiveHadBye() {
+        List<Player> active = pairingEngine.activePlayers();
+        return active.size() % 2 == 1
+                && new HashSet<>(pairingEngine.getPlayersWithBye(pairingEngine.getAllMatches())).containsAll(active);
     }
 
     private static String rounds(int n) {
@@ -779,7 +788,8 @@ public class TournamentRound {
     public List<Integer> correctableRounds() {
         List<Integer> rounds = new ArrayList<>();
         for (int r = 1; r < currentRound; r++) {
-            if (!pairingEngine.getMatchesOfRound(r).isEmpty()) rounds.add(r);
+            // rounds whose matches are all struck have nothing to enter
+            if (matchesOfRound(r).stream().anyMatch(m -> m.getSecondPlayer() != null)) rounds.add(r);
         }
         rounds.add(currentRound);
         return rounds;

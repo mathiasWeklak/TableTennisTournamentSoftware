@@ -58,7 +58,7 @@ public class ResultEntryView extends JDialog {
         // --- round selection ---
         JPanel roundRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         roundRow.setBackground(UITheme.BACKGROUND);
-        JLabel roundLabel = new JLabel("Runde:");
+        JLabel roundLabel = new JLabel("Anzeigen:");
         roundLabel.setFont(UITheme.FONT_BODY);
         JComboBox<Integer> roundBox = new JComboBox<>(rounds.toArray(new Integer[0]));
         roundBox.setSelectedItem(initialRound);

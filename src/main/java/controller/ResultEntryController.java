@@ -282,13 +282,14 @@ public class ResultEntryController {
         public void insertString(int offs, String str, AttributeSet a) throws BadLocationException {
             StringBuilder sb = new StringBuilder();
             str.chars()
-                    .filter(Character::isDigit)
+                    .filter(c -> c >= '0' && c <= '9') // only ASCII digits (no full-width digits)
                     .forEach(c -> sb.append((char) c));
             String filtered = sb.toString();
             if (filtered.isEmpty()) return;
             String current = getText(0, getLength());
             String result = current.substring(0, offs) + filtered + current.substring(offs);
             if (result.length() > 1 && result.startsWith("0")) return;
+            if (result.length() > 3) return; // no set ends beyond three digits
             super.insertString(offs, filtered, a);
         }
     }

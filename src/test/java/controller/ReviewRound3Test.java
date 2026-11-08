@@ -42,7 +42,7 @@ public class ReviewRound3Test {
     @Test
     public void groupSettings_bestNextPlacedMessagesAreAchievable() {
         String twoGroups = TournamentController.validateGroupSettings(8, 4, 2, 2);
-        assertTrue(twoGroups.contains("höchstens 1 Nächstplatzierte"), twoGroups);
+        assertTrue(twoGroups.contains("höchstens ein Nächstplatzierter"), twoGroups);
         assertNull(TournamentController.validateGroupSettings(8, 4, 2, 1));
 
         String oneGroup = TournamentController.validateGroupSettings(4, 4, 2, 1);
@@ -53,6 +53,19 @@ public class ReviewRound3Test {
         assertFalse(noAdvice.contains("erhöhen"), noAdvice);
         // groups of 4, 1 qualifies: raising is possible
         assertTrue(TournamentController.validateGroupSettings(8, 4, 1, 2).contains("erhöhen"));
+    }
+
+    @Test
+    public void scoreField_onlyAsciiDigitsAndAtMostThree() throws Exception {
+        ResultEntryController.DigitsOnlyDocument doc = new ResultEntryController.DigitsOnlyDocument();
+        doc.insertString(0, "１１", null); // full-width digits
+        assertEquals("", doc.getText(0, doc.getLength()));
+        doc.insertString(0, "1a1", null);
+        assertEquals("11", doc.getText(0, doc.getLength()));
+        doc.insertString(2, "23", null);
+        assertEquals("11", doc.getText(0, doc.getLength()), "höchstens drei Stellen");
+        doc.insertString(2, "2", null);
+        assertEquals("112", doc.getText(0, doc.getLength()));
     }
 
     @Test
